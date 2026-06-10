@@ -1,0 +1,45 @@
+name: 构建并部署博客
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:   # 允许手动触发
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. 检出代码
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      # 2. 安装 Python 依赖
+      - name: 安装依赖
+        run: pip install markdown PyYAML
+
+      # 3. 构建静态文件
+      - name: 构建博客
+        run: python scripts/build.py
+
+      # 4. 通过 SSH 部署到 VPS
+      - name: 部署到 VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: 204.152.198.206
+          port: 44083                        # NAT SSH 端口
+          username: root
+          key: ${{ secrets.SSH_PRIVATE_KEY }} # 在 GitHub Secrets 中配置
+          source: "dist/"
+          target: "/var/www/blog/myrepo/"
+          strip_components: 1                # 去掉 dist/ 前缀，直接放文件
+
+      # 5. 重载 Nginx（确保新文件生效）
+      - name: 重载 Nginx
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 204.152.198.206
+          port: 44083
+          username: root
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: nginx -s reload
