@@ -93,6 +93,7 @@ def head(title, root=""):
         '<meta name="viewport" content="width=device-width, initial-scale=1.0">\n'
         f'<title>{title}</title>\n'
         f'<link rel="stylesheet" href="{root}static/style.css?v={VERSION}">\n'
+        '<link rel="stylesheet" href="https://fastly.jsdelivr.net/gh/stevenjoezhang/live2d-widget@latest/waifu.css">\n'
         f'<link rel="alternate" type="application/rss+xml" title="RSS" href="{root}rss.xml">\n'
         '</head>\n'
         '<body data-theme="paper">\n'
@@ -112,15 +113,36 @@ def head(title, root=""):
 
 
 def foot(root=""):
+    # Live2D 桌宠：stevenjoezhang/live2d-widget，自动加载、右下角固定
+    live2d = (
+        '<script>\n'
+        'window.live2d_settings = {\n'
+        '  modelId: 1, modelTexturesId: 53,\n'
+        '  showHitokoto: false,\n'
+        '  showCopyMessage: false,\n'
+        '  showF12OpenMsg: false,\n'
+        '  showWelcomeMessage: false,\n'
+        '  showInfoMessage: false,\n'
+        '  waifuSize: "280x250",\n'
+        '  waifuTipsSize: "260x70",\n'
+        '  waifuMinWidth: "900px",\n'
+        '  waifuEdgeSide: "right:30",\n'
+        '  waifuDraggable: "unlimited",\n'
+        '  waifuDraggableRevert: true\n'
+        '};\n'
+        '</script>\n'
+        '<script async '
+        'src="https://fastly.jsdelivr.net/gh/stevenjoezhang/live2d-widget@latest/autoload.js">'
+        '</script>\n'
+    )
     return (
         '<footer class="site-footer">\n'
         '  <span>以文字为容器</span>\n'
         f'  <a href="{root}rss.xml">RSS</a>\n'
         '</footer>\n'
         f'<script src="{root}static/theme.js?v={VERSION}"></script>\n'
-        '<script src="https://cdn.jsdelivr.net/npm/oh-my-live2d/dist/index.min.js"></script>\n'
-        f'<script src="{root}static/pet.js?v={VERSION}"></script>\n'
-        '</body>\n'
+        + live2d
+        + '</body>\n'
         '</html>'
     )
 

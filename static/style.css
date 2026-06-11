@@ -144,7 +144,6 @@ a:hover { color:var(--accent); }
 
 .cat-nav { display:flex; flex-direction:column; gap:0.1rem; }
 
-.cat { }
 .cat summary {
   list-style:none;
   cursor:default;             /* 默认非手型 */
@@ -364,12 +363,16 @@ main > * {
   main { padding:2rem 1.2rem 4rem; }
   .post-card h2 { font-size:1.2rem; }
   .tag-post-list li { flex-direction:column; gap:0.2rem; }
-  /* 移动端隐藏桌宠（Live2D 库的默认容器） */
-  #oml2d, .oml2d-stage { display:none !important; }
 }
 
-/* ───── Live2D 桌宠样式微调 ───── */
-/* 库会自带样式，这里只确保不与现有布局冲突 */
-.oml2d-stage, #oml2d {
-  z-index: 30 !important;
+/* ───── Live2D 桌宠位置约束 ───── */
+/* stevenjoezhang/live2d-widget 默认 id 是 #waifu，定位 fixed 右下角 */
+#waifu {
+  z-index: 60 !important;       /* 在主内容上方、header 下方 */
+}
+/* 暗色主题下让对话气泡有边框可见 */
+body[data-theme="ink"] #waifu-tips {
+  background-color: rgba(40, 40, 36, 0.95) !important;
+  color: var(--ink) !important;
+  border-color: var(--rule-2) !important;
 }
