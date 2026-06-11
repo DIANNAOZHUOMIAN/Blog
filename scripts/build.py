@@ -113,7 +113,6 @@ def head(title, root=""):
 
 
 def foot(root=""):
-    # Live2D 桌宠：stevenjoezhang/live2d-widget，自动加载、右下角固定
     live2d = (
         '<script>\n'
         'window.live2d_settings = {\n'
@@ -138,6 +137,7 @@ def foot(root=""):
     return (
         '<footer class="site-footer">\n'
         '  <span>以文字为容器</span>\n'
+        '  <a href="#" id="pet-restore" title="唤回看板娘">唤回桌宠</a>\n'
         f'  <a href="{root}rss.xml">RSS</a>\n'
         '</footer>\n'
         f'<script src="{root}static/theme.js?v={VERSION}"></script>\n'

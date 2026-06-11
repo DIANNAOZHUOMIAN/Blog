@@ -44,7 +44,6 @@ body[data-theme="sakura"] {
   --header-h:60px;
 }
 
-/* ───── 基础 ───── */
 *,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
 html { font-size:17px; -webkit-font-smoothing:antialiased; }
 body {
@@ -61,7 +60,7 @@ body {
 a { color:inherit; text-decoration:none; }
 a:hover { color:var(--accent); }
 
-/* ───── Header（固定） ───── */
+/* Header（固定） */
 .site-header {
   position:fixed; top:0; left:0; right:0;
   z-index:100;
@@ -122,11 +121,11 @@ a:hover { color:var(--accent); }
   padding:0.2rem 0.5rem;
   cursor:pointer; line-height:1;
   transition:color 0.15s;
-  display:none;     /* 桌面隐藏 */
+  display:none;
 }
 #sidebar-toggle:hover { color:var(--ink); }
 
-/* ───── 侧栏（固定） ───── */
+/* 侧栏（固定） */
 .sidebar {
   position:fixed;
   top:var(--header-h);
@@ -146,7 +145,7 @@ a:hover { color:var(--accent); }
 
 .cat summary {
   list-style:none;
-  cursor:default;             /* 默认非手型 */
+  cursor:default;
   padding:0;
   display:flex;
   align-items:center;
@@ -157,7 +156,7 @@ a:hover { color:var(--accent); }
 .cat summary::marker { content:""; }
 
 .cat-title {
-  cursor:pointer;            /* 仅文字可点击 */
+  cursor:pointer;
   font-family:var(--sans);
   font-size:0.95rem;
   font-weight:500;
@@ -201,7 +200,6 @@ a:hover { color:var(--accent); }
   background:var(--paper-2);
 }
 
-/* ───── 主区域 ───── */
 main {
   margin-left:var(--side-w);
   padding:2.5rem 1.5rem 4rem;
@@ -211,7 +209,6 @@ main > * {
   margin-left:auto; margin-right:auto;
 }
 
-/* ───── 文章列表 ───── */
 .post-list { display:flex; flex-direction:column; }
 .post-card { padding:1.6rem 0; border-bottom:1px solid var(--rule); }
 .post-card:first-child { padding-top:0; }
@@ -235,7 +232,6 @@ main > * {
   color:var(--ink-2); font-weight:300; line-height:1.7;
 }
 
-/* ───── 文章页 ───── */
 .post-full { max-width:100%; }
 .post-header {
   padding-bottom:1.6rem;
@@ -299,7 +295,6 @@ main > * {
 }
 .back-link:hover { color:var(--ink); }
 
-/* ───── 目录页 ───── */
 .page-title {
   font-family:var(--serif); font-size:1.8rem;
   font-weight:400; letter-spacing:-0.03em;
@@ -323,12 +318,12 @@ main > * {
   color:var(--ink-3); white-space:nowrap;
 }
 
-/* ───── Footer ───── */
 .site-footer {
   margin-left:var(--side-w);
   padding:1.5rem;
   border-top:1px solid var(--rule);
   display:flex; justify-content:space-between; align-items:center;
+  gap:1rem;
 }
 .site-footer span {
   font-family:var(--sans); font-size:0.78rem;
@@ -337,9 +332,16 @@ main > * {
 .site-footer a {
   font-family:var(--mono); font-size:0.75rem;
   color:var(--ink-3); letter-spacing:0.06em; text-transform:uppercase;
+  transition:color 0.15s;
+}
+.site-footer a:hover { color:var(--accent); }
+#pet-restore {
+  font-family:var(--sans) !important;
+  text-transform:none !important;
+  cursor:pointer;
+  letter-spacing:0.04em !important;
 }
 
-/* ───── 响应式 ───── */
 @media (max-width:980px) {
   :root { --side-w:0px; }
   .sidebar {
@@ -365,12 +367,8 @@ main > * {
   .tag-post-list li { flex-direction:column; gap:0.2rem; }
 }
 
-/* ───── Live2D 桌宠位置约束 ───── */
-/* stevenjoezhang/live2d-widget 默认 id 是 #waifu，定位 fixed 右下角 */
-#waifu {
-  z-index: 60 !important;       /* 在主内容上方、header 下方 */
-}
-/* 暗色主题下让对话气泡有边框可见 */
+/* Live2D 桌宠 */
+#waifu { z-index:60 !important; }
 body[data-theme="ink"] #waifu-tips {
   background-color: rgba(40, 40, 36, 0.95) !important;
   color: var(--ink) !important;
