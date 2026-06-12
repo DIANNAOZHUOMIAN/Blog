@@ -1,5 +1,5 @@
 ---
-title: C# 委托详解
+title: C# 委托
 date: 2026-06-11
 tags: [C#, 委托, Delegate]
 summary: 委托的本质、Func/Action/Predicate、多播、闭包陷阱与函数式应用。

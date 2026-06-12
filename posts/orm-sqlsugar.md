@@ -1,5 +1,5 @@
 ---
-title: SqlSugar 深入
+title: SqlSugar
 date: 2026-06-11
 tags: [ORM, SqlSugar, .NET]
 summary: 国产 ORM，链式查询、CRUD、关联、批量、事务、CodeFirst、AOP、多数据库、分表与读写分离。

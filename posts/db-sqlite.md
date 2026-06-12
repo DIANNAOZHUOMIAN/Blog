@@ -1,5 +1,5 @@
 ---
-title: SQLite 详解
+title: SQLite
 date: 2026-06-11
 tags: [数据库, SQLite, 嵌入式]
 summary: 单文件嵌入式数据库的架构、类型亲和性、WAL、事务、限制与最佳实践。

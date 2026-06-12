@@ -2,16 +2,24 @@
 """博客构建脚本"""
 
 import os
+import sys
 import shutil
 import re
 import time
 from pathlib import Path
 
+# Windows 控制台默认 GBK，无法编码 ✓ 等字符，统一切到 UTF-8 防止崩溃
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+except (AttributeError, ValueError):
+    pass
+
 try:
     import markdown
     import yaml
+    import pygments  # noqa: F401  代码高亮（codehilite 依赖）
 except ImportError:
-    os.system("pip install markdown PyYAML --break-system-packages -q")
+    os.system("pip install markdown PyYAML Pygments --break-system-packages -q")
     import markdown
     import yaml
 
@@ -24,10 +32,11 @@ VERSION = time.strftime("%Y%m%d%H%M")
 
 CATEGORIES = [
     ("csharp-",  "C#"),
-    ("db-",      "数据库"),
-    ("comm-",    "通信"),
-    ("orm-",     "ORM"),
+    ("rust-",    "Rust"),
     ("python-",  "Python"),
+    ("db-",      "数据库"),
+    ("orm-",     "ORM"),
+    ("comm-",    "通信"),
     ("design-",  "设计模式"),
 ]
 
@@ -115,23 +124,9 @@ def head(title, root=""):
 
 
 def foot(root=""):
+    # stevenjoezhang/live2d-widget 通过 autoload.js 内部的 initWidget 读取配置，
+    # 无需旧版 fghrsh 的 window.live2d_settings 全局对象。
     live2d = (
-        '<script>\n'
-        'window.live2d_settings = {\n'
-        '  modelId: 1, modelTexturesId: 53,\n'
-        '  showHitokoto: false,\n'
-        '  showCopyMessage: false,\n'
-        '  showF12OpenMsg: false,\n'
-        '  showWelcomeMessage: false,\n'
-        '  showInfoMessage: false,\n'
-        '  waifuSize: "280x250",\n'
-        '  waifuTipsSize: "260x70",\n'
-        '  waifuMinWidth: "900px",\n'
-        '  waifuEdgeSide: "right:30",\n'
-        '  waifuDraggable: "unlimited",\n'
-        '  waifuDraggableRevert: true\n'
-        '};\n'
-        '</script>\n'
         '<script async '
         'src="https://fastly.jsdelivr.net/gh/stevenjoezhang/live2d-widget@latest/autoload.js">'
         '</script>\n'
@@ -173,8 +168,29 @@ def render_sidebar(groups, root="", current_slug=None):
 
 
 def render_md(content):
-    md = markdown.Markdown(extensions=["fenced_code", "tables", "toc", "nl2br"])
+    md = markdown.Markdown(
+        extensions=["fenced_code", "codehilite", "tables", "toc", "nl2br"],
+        extension_configs={
+            "codehilite": {
+                "guess_lang": False,   # 没标语言的代码块不猜测，保持纯文本
+                "css_class": "codehilite",
+            }
+        },
+    )
     return md.convert(content)
+
+
+def strip_leading_h1(content):
+    """正文首个一级标题与文章头部标题重复，渲染前去掉它。"""
+    lines = content.split("\n")
+    i = 0
+    while i < len(lines) and lines[i].strip() == "":
+        i += 1
+    if i < len(lines) and re.match(r"^#\s+\S", lines[i]):   # 一级标题（非 ## ）
+        del lines[i]
+        while i < len(lines) and lines[i].strip() == "":
+            del lines[i]
+    return "\n".join(lines)
 
 
 def build_index(posts, groups):
@@ -202,7 +218,7 @@ def build_index(posts, groups):
 
 
 def build_post(post, groups):
-    body = render_md(post["content"])
+    body = render_md(strip_leading_h1(post["content"]))
     article = (
         '<article class="post-full">\n'
         '  <header class="post-header">\n'

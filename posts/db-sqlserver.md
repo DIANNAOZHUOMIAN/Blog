@@ -1,5 +1,5 @@
 ---
-title: SQL Server 详解
+title: SQL Server
 date: 2026-06-11
 tags: [数据库, SQL Server, T-SQL]
 summary: 架构、T-SQL、索引、事务隔离、锁、执行计划、性能调优与运维要点。

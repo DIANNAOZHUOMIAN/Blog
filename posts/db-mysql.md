@@ -1,5 +1,5 @@
 ---
-title: MySQL 详解
+title: MySQL
 date: 2026-06-11
 tags: [数据库, MySQL, InnoDB]
 summary: 架构、InnoDB、索引、事务/锁/MVCC、SQL 语法、主从复制、慢查询排查与运维。

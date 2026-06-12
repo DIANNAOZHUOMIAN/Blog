@@ -1,5 +1,5 @@
 ---
-title: 串口通信详解（RS-232 / 422 / 485）
+title: 串口通信（RS-232 / 422 / 485）
 date: 2026-06-11
 tags: [通信, 串口, RS-232, RS-485, UART]
 summary: UART 帧结构、电气标准、参数配置、C# SerialPort 实战、组帧与常见坑。

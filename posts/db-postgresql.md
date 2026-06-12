@@ -1,5 +1,5 @@
 ---
-title: PostgreSQL 详解
+title: PostgreSQL
 date: 2026-06-11
 tags: [数据库, PostgreSQL, SQL]
 summary: 架构、类型系统、索引、MVCC、隔离级别、JSON/数组、扩展生态与运维。

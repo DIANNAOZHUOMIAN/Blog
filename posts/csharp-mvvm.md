@@ -1,5 +1,5 @@
 ---
-title: C# MVVM 模式详解
+title: C# MVVM 模式
 date: 2026-06-11
 tags: [C#, MVVM, WPF]
 summary: MVVM 三层职责、INotifyPropertyChanged、ICommand、Messenger、CommunityToolkit.Mvvm 与常见坑。

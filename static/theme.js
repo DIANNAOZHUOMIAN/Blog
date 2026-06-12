@@ -54,40 +54,46 @@
       });
     }
 
-    /* 唤回桌宠：清掉所有相关存储 + 移除已存在 DOM + 重新加载脚本 */
+    /* 唤回桌宠：优先就地复位，无需刷新页面 */
+    const LIVE2D = 'https://fastly.jsdelivr.net/gh/stevenjoezhang/live2d-widget@latest/';
+    const CDN    = 'https://fastly.jsdelivr.net/gh/fghrsh/live2d_api/';
+
+    function restorePet() {
+      // 去掉「关闭 24h」标记，否则脚本会继续把它藏起来
+      try { localStorage.removeItem('waifu-display'); } catch (_) {}
+
+      const waifu  = document.getElementById('waifu');
+      const toggle = document.getElementById('waifu-toggle');
+
+      // 1) 已加载、仅被隐藏（点 × 关闭后 DOM 仍在）→ 直接复位，最快、无需刷新
+      if (waifu) {
+        waifu.style.display = '';
+        requestAnimationFrame(() => { waifu.style.bottom = '0'; });
+        if (toggle) toggle.classList.remove('waifu-toggle-active');
+        return;
+      }
+
+      // 2) 脚本已就绪但 #waifu 未挂载（刷新时正处于隐藏期）→ 直接重新挂载
+      if (typeof window.loadWidget === 'function') {
+        try { window.loadWidget(LIVE2D + 'waifu-tips.json', CDN); return; } catch (_) {}
+      }
+
+      // 3) 完全未加载 → 重新注入 autoload（带时间戳防缓存）
+      document.querySelectorAll('script[src*="live2d-widget"]').forEach(s => s.remove());
+      const s = document.createElement('script');
+      s.async = true;
+      s.src = LIVE2D + 'autoload.js?t=' + Date.now();
+      document.body.appendChild(s);
+    }
+
     const restore = document.getElementById('pet-restore');
     if (restore) {
       restore.addEventListener('click', (e) => {
         e.preventDefault();
-
-        // 1) 清掉所有 waifu / live2d / 模型相关的 storage 键
-        const purge = (storage) => {
-          try {
-            Object.keys(storage).forEach(k => {
-              if (/waifu|live2d|cubism|model/i.test(k)) storage.removeItem(k);
-            });
-          } catch (_) {}
-        };
-        purge(sessionStorage);
-        purge(localStorage);
-
-        // 2) 直接移除已存在的桌宠 DOM
-        ['waifu', 'waifu-toggle'].forEach(id => {
-          const el = document.getElementById(id);
-          if (el) el.remove();
-        });
-
-        // 3) 移除旧脚本，重新加载（带时间戳防缓存）
-        document.querySelectorAll('script[src*="live2d-widget"]').forEach(s => s.remove());
-        const s = document.createElement('script');
-        s.async = true;
-        s.src = 'https://fastly.jsdelivr.net/gh/stevenjoezhang/live2d-widget@latest/autoload.js?t=' + Date.now();
-        document.body.appendChild(s);
-
-        // 4) 视觉反馈
+        restorePet();
         const old = restore.textContent;
-        restore.textContent = '正在唤回…';
-        setTimeout(() => { restore.textContent = old; }, 2500);
+        restore.textContent = '已唤回';
+        setTimeout(() => { restore.textContent = old; }, 1500);
       });
     }
   }

@@ -1,5 +1,5 @@
 ---
-title: Modbus 协议详解
+title: Modbus 协议
 date: 2026-06-11
 tags: [通信, Modbus, 工业总线]
 summary: RTU / ASCII / TCP 三种形态、4 区数据模型、功能码、报文解析、C# 实战与常见坑。

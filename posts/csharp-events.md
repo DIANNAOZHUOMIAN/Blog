@@ -1,5 +1,5 @@
 ---
-title: C# 事件详解
+title: C# 事件
 date: 2026-06-11
 tags: [C#, 事件, Event]
 summary: 事件本质、声明模式、线程安全触发、弱事件、内存泄漏、与 Rx 对比。

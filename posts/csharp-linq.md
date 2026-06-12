@@ -1,11 +1,11 @@
 ---
-title: C# LINQ 详解
+title: C# LINQ
 date: 2026-06-11
 tags: [C#, LINQ]
 summary: 基础用法、查询语法、延迟执行、IEnumerable vs IQueryable、性能优化与进阶技巧。
 ---
 
-# C# LINQ 详解
+# C# LINQ
 
 LINQ（Language Integrated Query）= 把查询带进语言。统一查询数组、集合、XML、数据库等任何 `IEnumerable<T>` / `IQueryable<T>` 数据源。
 

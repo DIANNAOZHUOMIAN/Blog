@@ -1,5 +1,5 @@
 ---
-title: Redis 详解
+title: Redis
 date: 2026-06-11
 tags: [数据库, Redis, 缓存, NoSQL]
 summary: 数据结构、持久化、复制/哨兵/集群、缓存三问题、分布式锁、消息队列与最佳实践。

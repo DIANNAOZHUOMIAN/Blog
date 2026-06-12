@@ -1,5 +1,5 @@
 ---
-title: WPF 详解
+title: WPF
 date: 2026-06-11
 tags: [C#, WPF, XAML]
 summary: XAML 体系、布局、依赖属性、附加属性、样式/模板、资源、绑定、路由事件、动画与性能。

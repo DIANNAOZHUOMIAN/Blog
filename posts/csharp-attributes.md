@@ -1,11 +1,11 @@
 ---
-title: C# 特性（Attribute）详解
+title: C# 特性（Attribute）
 date: 2026-06-11
 tags: [C#, 特性, 反射]
 summary: 特性本质、内置特性、自定义特性、反射读取、性能优化与源生成器替代。
 ---
 
-# C# 特性详解
+# C# 特性
 
 特性（Attribute）= 把元数据贴在程序元素上，运行/编译期可被读取。本质是一个普通类，继承自 `System.Attribute`。
 

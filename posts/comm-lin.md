@@ -1,5 +1,5 @@
 ---
-title: LIN 总线详解
+title: LIN 总线
 date: 2026-06-11
 tags: [通信, LIN, 车载, 总线]
 summary: LIN 物理层、帧结构、调度表、节点角色、与 CAN 的关系、PC 接入与典型应用。

@@ -5,7 +5,7 @@ tags: [C#, 引用, 值类型, ref]
 summary: 值类型与引用类型本质、ref/out/in 参数、ref 返回与 ref 局部变量、ref struct、Span<T> 应用。
 ---
 
-# C# 引用语义全解
+# C# 引用语义
 
 ## 一、值类型 vs 引用类型
 

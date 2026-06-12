@@ -1,5 +1,5 @@
 ---
-title: CAN 总线详解
+title: CAN 总线
 date: 2026-06-11
 tags: [通信, CAN, 车载, 工业总线]
 summary: 电气、帧结构、仲裁机制、错误处理、CAN FD、上层协议（CANopen / J1939 / OBD-II）、PC 工具与 SDK。

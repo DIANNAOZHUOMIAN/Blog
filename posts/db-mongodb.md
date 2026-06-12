@@ -1,5 +1,5 @@
 ---
-title: MongoDB 详解
+title: MongoDB
 date: 2026-06-11
 tags: [数据库, MongoDB, NoSQL, 文档]
 summary: 文档模型、CRUD、索引、聚合管道、副本集 / 分片、事务、Schema 设计、常用 .NET 客户端。

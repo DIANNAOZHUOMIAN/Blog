@@ -1,5 +1,5 @@
 ---
-title: TCP / UDP 详解（含粘包与丢包专题）
+title: TCP / UDP（含粘包与丢包）
 date: 2026-06-11
 tags: [通信, TCP, UDP, 粘包, 丢包]
 summary: TCP/UDP 协议原理、Socket 编程、粘包/拆包（原因 + 4 种解决方案）、UDP 丢包乱序（原因 + 应用层补救）、性能与常见坑。

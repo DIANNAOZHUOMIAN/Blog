@@ -1,5 +1,5 @@
 ---
-title: EF Core 深入
+title: EF Core
 date: 2026-06-11
 tags: [ORM, EF Core, .NET]
 summary: DbContext、Fluent API、迁移、查询追踪、Include、批量、原生 SQL、并发、性能与陷阱。

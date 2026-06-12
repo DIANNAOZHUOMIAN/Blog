@@ -11,6 +11,10 @@ body[data-theme="paper"] {
   --bg-image: radial-gradient(circle at 20% 30%, rgba(192,57,43,0.04), transparent 50%),
               radial-gradient(circle at 80% 70%, rgba(85,85,85,0.04), transparent 50%);
   --theme-dot:#1a1a1a;
+  --syn-comment:#9a968c; --syn-keyword:#a23b2c; --syn-string:#5a7d4f;
+  --syn-number:#9a6a2f;  --syn-func:#2f5d86;    --syn-type:#7a4f9a;
+  --syn-builtin:#2f5d86; --syn-op:#6a6a64;      --syn-punc:#7a7a72;
+  --syn-name:#3a3a36;    --syn-attr:#9a6a2f;    --syn-deco:#7a4f9a;
 }
 body[data-theme="ink"] {
   --ink:#e8e6e0; --ink-2:#a0a09a; --ink-3:#66665e;
@@ -21,6 +25,10 @@ body[data-theme="ink"] {
   --bg-image: radial-gradient(circle at 30% 20%, rgba(232,184,122,0.06), transparent 60%),
               radial-gradient(circle at 70% 80%, rgba(120,90,150,0.05), transparent 60%);
   --theme-dot:#e8e6e0;
+  --syn-comment:#6a6a60; --syn-keyword:#e8b87a; --syn-string:#9fc08a;
+  --syn-number:#d9a86a;  --syn-func:#8fb8d8;    --syn-type:#c8a6e0;
+  --syn-builtin:#8fb8d8; --syn-op:#b0b0a8;      --syn-punc:#9a9a92;
+  --syn-name:#d8d6d0;    --syn-attr:#d9a86a;    --syn-deco:#c8a6e0;
 }
 body[data-theme="sakura"] {
   --ink:#4a3540; --ink-2:#806572; --ink-3:#b59ba8;
@@ -33,16 +41,22 @@ body[data-theme="sakura"] {
     radial-gradient(circle at 85% 75%, rgba(255,200,220,0.18), transparent 55%),
     radial-gradient(circle at 50% 100%, rgba(255,230,235,0.4), transparent 70%);
   --theme-dot:#e85a7a;
+  --syn-comment:#bda4b2; --syn-keyword:#d6336c; --syn-string:#3f8f5a;
+  --syn-number:#c2772f;  --syn-func:#3f6fb0;    --syn-type:#9a4fb0;
+  --syn-builtin:#3f6fb0; --syn-op:#8a6b7a;      --syn-punc:#9a7b8a;
+  --syn-name:#4a3540;    --syn-attr:#c2772f;    --syn-deco:#9a4fb0;
 }
 
 :root {
   --serif:'Noto Serif SC','Source Han Serif SC',serif;
   --sans:'Noto Sans SC','PingFang SC',sans-serif;
   --mono:'JetBrains Mono','Courier New',monospace;
-  --main-w:720px;
-  --side-w:260px;
+  --main-w:730px;
+  --side-w:264px;
   --header-h:60px;
 }
+
+html { scroll-behavior:smooth; }
 
 *,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
 html { font-size:17px; -webkit-font-smoothing:antialiased; }
@@ -202,12 +216,14 @@ a:hover { color:var(--accent); }
 
 main {
   margin-left:var(--side-w);
-  padding:2.5rem 1.5rem 4rem;
+  padding:3rem 2rem 5rem;
 }
 main > * {
   max-width:var(--main-w);
   margin-left:auto; margin-right:auto;
 }
+/* 锚点跳转时给固定头留出余量 */
+.post-body :where(h1,h2,h3) { scroll-margin-top:calc(var(--header-h) + 1rem); }
 
 .post-list { display:flex; flex-direction:column; }
 .post-card { padding:1.6rem 0; border-bottom:1px solid var(--rule); }
@@ -232,7 +248,7 @@ main > * {
   color:var(--ink-2); font-weight:300; line-height:1.7;
 }
 
-.post-full { max-width:100%; }
+.post-full { max-width:var(--main-w); }
 .post-header {
   padding-bottom:1.6rem;
   border-bottom:1px solid var(--rule);
@@ -275,6 +291,46 @@ main > * {
   border:1px solid var(--rule);
 }
 .post-body pre code { background:none; padding:0; font-size:0.86rem; line-height:1.65; }
+
+/* ───── 代码高亮（Pygments / codehilite） ───── */
+.post-body .codehilite { background:transparent; margin:1.4rem 0; }
+.post-body .codehilite pre { margin:0; }
+.post-body .codehilite .err { color:inherit; background:none; border:none; }
+/* 注释 */
+.post-body .codehilite .c,  .post-body .codehilite .ch, .post-body .codehilite .cm,
+.post-body .codehilite .cp, .post-body .codehilite .c1, .post-body .codehilite .cs {
+  color:var(--syn-comment); font-style:italic;
+}
+/* 关键字 */
+.post-body .codehilite .k,  .post-body .codehilite .kc, .post-body .codehilite .kd,
+.post-body .codehilite .kn, .post-body .codehilite .kp, .post-body .codehilite .kr,
+.post-body .codehilite .nt { color:var(--syn-keyword); }
+/* 类型 / 类名 / 命名空间 */
+.post-body .codehilite .kt, .post-body .codehilite .nc,
+.post-body .codehilite .nn { color:var(--syn-type); }
+/* 字符串 */
+.post-body .codehilite .s,  .post-body .codehilite .s1, .post-body .codehilite .s2,
+.post-body .codehilite .sb, .post-body .codehilite .sc, .post-body .codehilite .sd,
+.post-body .codehilite .se, .post-body .codehilite .sh, .post-body .codehilite .si,
+.post-body .codehilite .sx, .post-body .codehilite .sr, .post-body .codehilite .ss,
+.post-body .codehilite .sa, .post-body .codehilite .dl { color:var(--syn-string); }
+/* 数字 */
+.post-body .codehilite .m,  .post-body .codehilite .mi, .post-body .codehilite .mf,
+.post-body .codehilite .mh, .post-body .codehilite .mo, .post-body .codehilite .mb,
+.post-body .codehilite .il { color:var(--syn-number); }
+/* 运算符 / 标点 */
+.post-body .codehilite .o, .post-body .codehilite .ow { color:var(--syn-op); }
+.post-body .codehilite .p { color:var(--syn-punc); }
+/* 函数 / 内置 / 装饰器 / 属性 / 变量 */
+.post-body .codehilite .nf, .post-body .codehilite .fm { color:var(--syn-func); }
+.post-body .codehilite .nb, .post-body .codehilite .bp { color:var(--syn-builtin); }
+.post-body .codehilite .nd { color:var(--syn-deco); }
+.post-body .codehilite .na { color:var(--syn-attr); }
+.post-body .codehilite .nv, .post-body .codehilite .vc, .post-body .codehilite .vg,
+.post-body .codehilite .vi { color:var(--syn-name); }
+.post-body .codehilite .gp { color:var(--syn-comment); }   /* shell 提示符 */
+.post-body .codehilite .gi { color:var(--syn-string); }
+.post-body .codehilite .gd { color:var(--syn-keyword); }
 .post-body hr { border:none; border-top:1px solid var(--rule); margin:2.5rem 0; }
 .post-body table {
   width:100%; border-collapse:collapse;
