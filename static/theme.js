@@ -1,4 +1,4 @@
-/* 主题切换：纸 → 墨 → 樱 */
+/* 主题切换 + 侧栏 + 唤回桌宠 */
 (function () {
   const THEMES = [
     { id: 'paper',  name: '纸' },
@@ -47,11 +47,47 @@
           sidebar.classList.remove('open');
         }
       });
-      /* 点击侧栏内的链接后关闭抽屉（移动端体验） */
       sidebar.addEventListener('click', e => {
         if (e.target.tagName === 'A' && window.innerWidth <= 980) {
           sidebar.classList.remove('open');
         }
+      });
+    }
+
+    /* 唤回桌宠：清掉所有相关存储 + 移除已存在 DOM + 重新加载脚本 */
+    const restore = document.getElementById('pet-restore');
+    if (restore) {
+      restore.addEventListener('click', (e) => {
+        e.preventDefault();
+
+        // 1) 清掉所有 waifu / live2d / 模型相关的 storage 键
+        const purge = (storage) => {
+          try {
+            Object.keys(storage).forEach(k => {
+              if (/waifu|live2d|cubism|model/i.test(k)) storage.removeItem(k);
+            });
+          } catch (_) {}
+        };
+        purge(sessionStorage);
+        purge(localStorage);
+
+        // 2) 直接移除已存在的桌宠 DOM
+        ['waifu', 'waifu-toggle'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.remove();
+        });
+
+        // 3) 移除旧脚本，重新加载（带时间戳防缓存）
+        document.querySelectorAll('script[src*="live2d-widget"]').forEach(s => s.remove());
+        const s = document.createElement('script');
+        s.async = true;
+        s.src = 'https://fastly.jsdelivr.net/gh/stevenjoezhang/live2d-widget@latest/autoload.js?t=' + Date.now();
+        document.body.appendChild(s);
+
+        // 4) 视觉反馈
+        const old = restore.textContent;
+        restore.textContent = '正在唤回…';
+        setTimeout(() => { restore.textContent = old; }, 2500);
       });
     }
   }
