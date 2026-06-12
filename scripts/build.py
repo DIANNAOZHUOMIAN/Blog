@@ -91,6 +91,8 @@ def head(title, root=""):
         '<head>\n'
         '<meta charset="UTF-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1.0">\n'
+        '<meta http-equiv="Cache-Control" content="no-cache, must-revalidate">\n'
+        '<meta http-equiv="Pragma" content="no-cache">\n'
         f'<title>{title}</title>\n'
         f'<link rel="stylesheet" href="{root}static/style.css?v={VERSION}">\n'
         '<link rel="stylesheet" href="https://fastly.jsdelivr.net/gh/stevenjoezhang/live2d-widget@latest/waifu.css">\n'
