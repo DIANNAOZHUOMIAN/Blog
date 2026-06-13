@@ -424,7 +424,9 @@ main > * {
 }
 
 /* Live2D 桌宠 */
-#waifu { z-index:60 !important; }
+#waifu { z-index:60 !important; cursor:grab; touch-action:none; }
+#waifu.waifu-dragging { cursor:grabbing; transition:none !important; }
+#waifu.waifu-dragging #waifu-tips { display:none !important; }   /* 拖动时不弹气泡 */
 body[data-theme="ink"] #waifu-tips {
   background-color: rgba(40, 40, 36, 0.95) !important;
   color: var(--ink) !important;

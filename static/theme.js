@@ -96,6 +96,92 @@
         setTimeout(() => { restore.textContent = old; }, 1500);
       });
     }
+
+    enablePetDrag();
+  }
+
+  /* ───── 桌宠鼠标拖拽（widget 本身不带，自行实现） ───── */
+  function enablePetDrag() {
+    const POS_KEY = 'waifu-pos';
+    let waifu = null, dragging = false, engaged = false;
+    let startX = 0, startY = 0, baseLeft = 0, baseTop = 0;
+    const THRESHOLD = 4;   // 移动超过 4px 才算拖动，否则视为点击（保留点按交互）
+
+    function clamp(v, max) { return Math.min(Math.max(0, v), Math.max(0, max)); }
+
+    function placeAt(el, left, top) {
+      el.style.right = 'auto';
+      el.style.bottom = 'auto';
+      el.style.left = clamp(left, window.innerWidth - el.offsetWidth) + 'px';
+      el.style.top = clamp(top, window.innerHeight - el.offsetHeight) + 'px';
+    }
+
+    // 还原上次拖到的位置（#waifu 由 widget 异步创建，出现后再应用）
+    function applySavedPos() {
+      const el = document.getElementById('waifu');
+      if (!el) return;
+      let saved = null;
+      try { saved = JSON.parse(localStorage.getItem(POS_KEY) || 'null'); } catch (_) {}
+      if (saved && typeof saved.left === 'number' && typeof saved.top === 'number') {
+        placeAt(el, saved.left, saved.top);
+        // widget 载入时会用 setTimeout 重设 bottom，稍后再覆盖一次
+        setTimeout(() => placeAt(el, saved.left, saved.top), 80);
+      }
+    }
+    const obs = new MutationObserver(() => {
+      if (document.getElementById('waifu')) { applySavedPos(); }
+    });
+    obs.observe(document.body, { childList: true });
+    applySavedPos();
+
+    document.addEventListener('pointerdown', (e) => {
+      const el = document.getElementById('waifu');
+      if (!el || !el.contains(e.target)) return;
+      if (e.target.closest('#waifu-tool')) return;   // 工具按钮不触发拖动
+      if (e.button !== 0) return;
+      waifu = el;
+      const r = el.getBoundingClientRect();
+      startX = e.clientX; startY = e.clientY;
+      baseLeft = r.left; baseTop = r.top;
+      dragging = true; engaged = false;
+    });
+
+    document.addEventListener('pointermove', (e) => {
+      if (!dragging || !waifu) return;
+      const dx = e.clientX - startX, dy = e.clientY - startY;
+      if (!engaged) {
+        if (Math.hypot(dx, dy) < THRESHOLD) return;   // 未越过阈值，仍当点击
+        engaged = true;
+        waifu.classList.add('waifu-dragging');
+        document.body.style.userSelect = 'none';
+      }
+      placeAt(waifu, baseLeft + dx, baseTop + dy);
+      e.preventDefault();
+    });
+
+    function endDrag() {
+      if (dragging && engaged && waifu) {
+        try {
+          localStorage.setItem(POS_KEY, JSON.stringify({
+            left: parseFloat(waifu.style.left) || 0,
+            top:  parseFloat(waifu.style.top) || 0,
+          }));
+        } catch (_) {}
+        waifu.classList.remove('waifu-dragging');
+      }
+      document.body.style.userSelect = '';
+      dragging = false; engaged = false; waifu = null;
+    }
+    document.addEventListener('pointerup', endDrag);
+    document.addEventListener('pointercancel', endDrag);
+
+    // 窗口缩放时把桌宠拉回可视区域
+    window.addEventListener('resize', () => {
+      const el = document.getElementById('waifu');
+      if (el && el.style.left) {
+        placeAt(el, parseFloat(el.style.left) || 0, parseFloat(el.style.top) || 0);
+      }
+    });
   }
 
   if (document.readyState === 'loading') {
