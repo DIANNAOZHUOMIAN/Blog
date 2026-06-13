@@ -98,6 +98,51 @@
     }
 
     enablePetDrag();
+    guardPetSwitching();
+  }
+
+  /* ───── 在 #waifu-tips 气泡里显示一句话（复用 widget 的样式） ───── */
+  function showWaifuTip(text, ms) {
+    const tips = document.getElementById('waifu-tips');
+    if (!tips) return;
+    tips.innerHTML = text;
+    tips.classList.add('waifu-tips-active');
+    clearTimeout(showWaifuTip._t);
+    showWaifuTip._t = setTimeout(
+      () => tips.classList.remove('waifu-tips-active'), ms || 3000);
+  }
+
+  /* ───── 串行化「切换模型 / 换装」，避免并行加载导致画布空白 ─────
+     上游 live2d.min.js 的 loadlive2d 不可重入：上一个模型贴图还没加载完
+     就再点一次，两次加载会竞争，画布变空白（但气泡已弹出）。这里在一次
+     切换完成前，用冷却锁挡掉后续点击。 */
+  function guardPetSwitching() {
+    let lock = false;
+    const COOLDOWN = 2000;   // 一次切换的保护窗口
+
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest(
+        '#waifu-tool-switch-model, #waifu-tool-switch-texture');
+      if (!btn) return;
+
+      if (lock) {
+        // 上一次切换还在进行，丢弃这次点击
+        e.stopImmediatePropagation();
+        e.preventDefault();
+        showWaifuTip('正在换装中，稍等一下下～', 2000);
+        return;
+      }
+
+      // 放行这次点击（不阻止冒泡，widget 的回调照常执行），同时上锁
+      lock = true;
+      const waifu = document.getElementById('waifu');
+      if (waifu) waifu.classList.add('waifu-switching');
+      setTimeout(() => {
+        lock = false;
+        const w = document.getElementById('waifu');
+        if (w) w.classList.remove('waifu-switching');
+      }, COOLDOWN);
+    }, true);   // 捕获阶段，先于 widget 自身的处理器
   }
 
   /* ───── 桌宠鼠标拖拽（widget 本身不带，自行实现） ───── */

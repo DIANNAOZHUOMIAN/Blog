@@ -427,6 +427,11 @@ main > * {
 #waifu { z-index:60 !important; cursor:grab; touch-action:none; }
 #waifu.waifu-dragging { cursor:grabbing; transition:none !important; }
 #waifu.waifu-dragging #waifu-tips { display:none !important; }   /* 拖动时不弹气泡 */
+/* 切换模型/换装的冷却期：禁用并淡化工具按钮，避免并行加载 */
+#waifu.waifu-switching #waifu-tool-switch-model,
+#waifu.waifu-switching #waifu-tool-switch-texture {
+  pointer-events:none; opacity:0.4;
+}
 body[data-theme="ink"] #waifu-tips {
   background-color: rgba(40, 40, 36, 0.95) !important;
   color: var(--ink) !important;
