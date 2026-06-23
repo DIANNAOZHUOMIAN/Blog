@@ -96,7 +96,57 @@ WITH cte AS (
 SELECT * FROM cte;
 ```
 
-### 4. 窗口函数
+### 4. 分组聚合与多表连接
+
+筛选条件：
+
+```sql
+SELECT * FROM Book
+WHERE BName LIKE N'张%'          -- 以"张"开头；NOT LIKE 取反
+  AND Id BETWEEN 1 AND 3         -- 闭区间，含 1 和 3
+  AND CateId IN (1, 3);          -- 等价多个 OR
+```
+
+分组聚合：`GROUP BY` 把相同值归为一组，`HAVING` 过滤**分组后**的结果（`WHERE` 过滤行、`HAVING` 过滤组）。非聚合列必须出现在 `GROUP BY` 中。
+
+```sql
+SELECT BName, COUNT(*) AS Cnt
+FROM Book
+WHERE Status = 0
+GROUP BY BName
+HAVING COUNT(*) >= 2            -- 只保留出现 ≥2 次的分组
+ORDER BY Cnt DESC;
+```
+
+聚合函数 `COUNT / SUM / AVG / MIN / MAX`。逻辑执行顺序：`FROM → WHERE → GROUP BY → HAVING → SELECT → ORDER BY`。
+
+多表连接：
+
+| 连接 | 含义 |
+|---|---|
+| `INNER JOIN` | 两表都匹配的行 |
+| `LEFT JOIN` | 左表全部 + 右表匹配（无则 NULL） |
+| `RIGHT JOIN` | 右表全部 + 左表匹配 |
+| `FULL OUTER JOIN` | 两表全部 |
+
+```sql
+SELECT b.Id, b.BName, c.CateName, u.UserName AS CreateUser
+FROM Book AS b
+LEFT JOIN Category AS c ON b.CateId = c.Id
+LEFT JOIN [User]   AS u ON b.CreateUser = u.Id;
+```
+
+`CASE WHEN`：行内条件分支，常用于把状态码翻译成文字：
+
+```sql
+SELECT Id,
+       CASE Status WHEN 0 THEN '正常'
+                   WHEN 1 THEN '已删除'
+                   ELSE '未知' END AS StatusText
+FROM Book;
+```
+
+### 5. 窗口函数
 
 ```sql
 SELECT Name, Score,
@@ -107,7 +157,7 @@ SELECT Name, Score,
 FROM Stu;
 ```
 
-### 5. 字符串 / 时间
+### 6. 字符串 / 时间
 
 ```sql
 LEN(s); LEFT(s, n); RIGHT(s, n); SUBSTRING(s, start, len);
@@ -121,7 +171,7 @@ DATEADD(day, 7, GETDATE()); DATEDIFF(day, a, b);
 YEAR(d); MONTH(d); DAY(d); DATEPART(weekday, d);
 ```
 
-### 6. JSON
+### 7. JSON
 
 ```sql
 SELECT JSON_VALUE(profile, '$.city')

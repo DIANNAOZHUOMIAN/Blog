@@ -1,0 +1,54 @@
+<svg viewBox="0 0 720 500" xmlns="http://www.w3.org/2000/svg" font-family="'Noto Sans SC','PingFang SC',sans-serif">
+  <defs>
+    <marker id="arrow" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#888"/>
+    </marker>
+  </defs>
+  <rect x="6" y="6" width="708" height="488" rx="14" fill="#fafaf8" stroke="#d8d8d2" stroke-width="1.5"/>
+  <text x="360" y="42" text-anchor="middle" font-size="20" font-weight="600" fill="#1a1a1a">三层架构（Three-Tier Architecture）</text>
+
+  <!-- 表现层 UI -->
+  <rect x="60" y="70" width="410" height="84" rx="10" fill="#eef3f8" stroke="#2f5d86" stroke-width="1.5"/>
+  <text x="80" y="102" font-size="17" font-weight="700" fill="#2f5d86">表现层 · UI</text>
+  <text x="80" y="126" font-size="12.5" fill="#555">用户交互、界面展示、输入校验</text>
+  <text x="80" y="145" font-size="11" fill="#999">WinForms / WPF / ASP.NET / Blazor</text>
+
+  <!-- 业务逻辑层 BLL -->
+  <rect x="60" y="190" width="410" height="84" rx="10" fill="#eef5ec" stroke="#5a7d4f" stroke-width="1.5"/>
+  <text x="80" y="222" font-size="17" font-weight="700" fill="#4f7045">业务逻辑层 · BLL</text>
+  <text x="80" y="246" font-size="12.5" fill="#555">业务规则、流程编排、事务与校验</text>
+  <text x="80" y="265" font-size="11" fill="#999">承上启下：连接 UI 与数据</text>
+
+  <!-- 数据访问层 DAL -->
+  <rect x="60" y="310" width="410" height="84" rx="10" fill="#fbf3e6" stroke="#9a6a2f" stroke-width="1.5"/>
+  <text x="80" y="342" font-size="17" font-weight="700" fill="#9a6a2f">数据访问层 · DAL</text>
+  <text x="80" y="366" font-size="12.5" fill="#555">增删改查、SQL / ORM 映射</text>
+  <text x="80" y="385" font-size="11" fill="#999">ADO.NET / EF Core / SqlSugar</text>
+
+  <!-- 数据库 -->
+  <ellipse cx="265" cy="430" rx="120" ry="13" fill="#e6e4df" stroke="#bdbab2"/>
+  <path d="M145,430 v26 a120,13 0 0 0 240,0 v-26" fill="#eeece7" stroke="#bdbab2"/>
+  <text x="265" y="452" text-anchor="middle" font-size="14" font-weight="600" fill="#555">数据库 Database</text>
+
+  <!-- 调用 / 返回 箭头 -->
+  <line x1="200" y1="154" x2="200" y2="188" stroke="#888" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <line x1="330" y1="190" x2="330" y2="156" stroke="#888" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <line x1="200" y1="274" x2="200" y2="308" stroke="#888" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <line x1="330" y1="310" x2="330" y2="276" stroke="#888" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <line x1="265" y1="394" x2="265" y2="414" stroke="#888" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <text x="172" y="176" font-size="10.5" fill="#888">调用</text>
+  <text x="338" y="176" font-size="10.5" fill="#888">返回</text>
+
+  <!-- 实体层 Model 贯穿三层 -->
+  <rect x="510" y="70" width="160" height="324" rx="10" fill="#f3eef8" stroke="#7a4f9a" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="590" y="100" text-anchor="middle" font-size="15" font-weight="700" fill="#7a4f9a">实体层</text>
+  <text x="590" y="120" text-anchor="middle" font-size="12" fill="#7a4f9a">Model / Entity</text>
+  <text x="590" y="160" text-anchor="middle" font-size="11.5" fill="#666">贯穿三层</text>
+  <text x="590" y="182" text-anchor="middle" font-size="11.5" fill="#666">承载数据传递</text>
+  <text x="590" y="220" text-anchor="middle" font-size="11" fill="#999">User</text>
+  <text x="590" y="242" text-anchor="middle" font-size="11" fill="#999">Order</text>
+  <text x="590" y="264" text-anchor="middle" font-size="11" fill="#999">Product …</text>
+  <line x1="470" y1="112" x2="508" y2="112" stroke="#b79bd0" stroke-width="1.4" stroke-dasharray="4 3"/>
+  <line x1="470" y1="232" x2="508" y2="232" stroke="#b79bd0" stroke-width="1.4" stroke-dasharray="4 3"/>
+  <line x1="470" y1="352" x2="508" y2="352" stroke="#b79bd0" stroke-width="1.4" stroke-dasharray="4 3"/>
+</svg>
