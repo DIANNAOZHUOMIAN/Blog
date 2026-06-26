@@ -99,30 +99,150 @@
     enablePetDrag();
     guardPetSwitching();
     initDivider();
+    initSearch();
   }
 
-  /* ───── 侧栏 / 正文之间的装饰分隔条：光晕随鼠标，颜色随主题 ───── */
+  /* ───── 分隔条：装饰光晕（随鼠标/主题）+ 拖拽改变目录宽度 ───── */
   function initDivider() {
     const d = document.getElementById('divider');
     if (!d) return;
-    let raf = 0, mx = 0, my = 0;
+    const root = document.documentElement;
+    const BP = 980, MIN = 200, MAX_ABS = 460, WKEY = 'sidebar-w';
 
+    function clampW(w) {
+      const max = Math.min(MAX_ABS, Math.round(window.innerWidth * 0.4));
+      return Math.max(MIN, Math.min(max, w));
+    }
+    // 应用保存的宽度（仅桌面；移动端清掉内联值，让媒体查询的 0 生效）
+    function applySavedWidth() {
+      if (window.innerWidth <= BP) { root.style.removeProperty('--side-w'); return; }
+      const w = parseInt(localStorage.getItem(WKEY) || '', 10);
+      if (w) root.style.setProperty('--side-w', clampW(w) + 'px');
+    }
+    applySavedWidth();
+
+    // 拖拽：侧栏右边缘 = 光标 X
+    let resizing = false;
+    d.addEventListener('pointerdown', (e) => {
+      if (window.innerWidth <= BP || e.button !== 0) return;
+      e.preventDefault();
+      resizing = true;
+      try { d.setPointerCapture(e.pointerId); } catch (_) {}
+      document.body.classList.add('resizing-sidebar');
+    });
+    window.addEventListener('pointermove', (e) => {
+      if (!resizing) return;
+      root.style.setProperty('--side-w', clampW(e.clientX) + 'px');
+    });
+    function stopResize() {
+      if (!resizing) return;
+      resizing = false;
+      document.body.classList.remove('resizing-sidebar');
+      const w = parseInt(getComputedStyle(root).getPropertyValue('--side-w'), 10);
+      if (w) localStorage.setItem(WKEY, w);
+    }
+    d.addEventListener('pointerup', stopResize);
+    d.addEventListener('pointercancel', stopResize);
+    window.addEventListener('resize', applySavedWidth);
+
+    // 装饰光晕：跟随鼠标 Y、按横向距离渐强
+    let raf = 0, mx = 0, my = 0;
     function update() {
       raf = 0;
+      if (resizing) return;
       const rect = d.getBoundingClientRect();
       const cx = rect.left + rect.width / 2;
-      // 离分隔条越近，光晕越强（140px 内渐显）
       const glow = Math.max(0, 1 - Math.abs(mx - cx) / 140);
       d.style.setProperty('--gy', (my - rect.top) + 'px');
       d.style.setProperty('--glow', glow.toFixed(3));
     }
-
     window.addEventListener('mousemove', (e) => {
       mx = e.clientX; my = e.clientY;
-      if (!raf) raf = requestAnimationFrame(update);   // 节流到每帧一次
+      if (!raf) raf = requestAnimationFrame(update);
     }, { passive: true });
-
     document.addEventListener('mouseleave', () => d.style.setProperty('--glow', '0'));
+  }
+
+  /* ───── 顶部搜索框：标题模糊搜索 ───── */
+  function initSearch() {
+    const box = document.getElementById('search');
+    const input = document.getElementById('search-input');
+    const results = document.getElementById('search-results');
+    if (!box || !input || !results || !Array.isArray(window.SEARCH_INDEX)) return;
+    const ROOT = window.SITE_ROOT || '';
+    let current = [], active = -1;
+
+    function esc(s) {
+      return s.replace(/[&<>"']/g, c => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+    // 模糊打分：子序列匹配，连续/开头加权；返回 -1 表示不匹配
+    function score(q, text) {
+      q = q.toLowerCase(); const t = text.toLowerCase();
+      if (!q) return -1;
+      const sub = t.indexOf(q);
+      if (sub >= 0) return 100 - sub + (sub === 0 ? 20 : 0);   // 子串命中优先
+      let qi = 0, sc = 0, prev = -2;
+      for (let i = 0; i < t.length && qi < q.length; i++) {
+        if (t[i] === q[qi]) {
+          sc += (i === prev + 1) ? 3 : 1;
+          if (i === 0) sc += 2;
+          prev = i; qi++;
+        }
+      }
+      return qi === q.length ? sc : -1;
+    }
+    function highlight(title, q) {
+      const t = title.toLowerCase(), i = t.indexOf(q.toLowerCase());
+      if (q && i >= 0) {
+        return esc(title.slice(0, i)) + '<mark>' + esc(title.slice(i, i + q.length)) +
+               '</mark>' + esc(title.slice(i + q.length));
+      }
+      return esc(title);
+    }
+
+    function close() { box.classList.remove('open'); active = -1; }
+    function setActive(n) {
+      const items = results.querySelectorAll('.search-item');
+      if (!items.length) return;
+      active = (n + items.length) % items.length;
+      items.forEach((el, i) => el.classList.toggle('active', i === active));
+      items[active].scrollIntoView({ block: 'nearest' });
+    }
+    function run() {
+      const q = input.value.trim();
+      if (!q) { close(); return; }
+      current = window.SEARCH_INDEX
+        .map(it => ({ it, s: score(q, it.t) }))
+        .filter(x => x.s >= 0)
+        .sort((a, b) => b.s - a.s)
+        .slice(0, 8)
+        .map(x => x.it);
+      if (!current.length) {
+        results.innerHTML = '<div class="search-empty">没有匹配的文章</div>';
+      } else {
+        results.innerHTML = current.map(it =>
+          '<a class="search-item" href="' + ROOT + 'posts/' + it.s + '.html">' +
+          '<span class="search-cat">' + esc(it.c) + '</span>' +
+          '<span class="search-title">' + highlight(it.t, q) + '</span></a>'
+        ).join('');
+      }
+      box.classList.add('open');
+      active = -1;
+    }
+
+    input.addEventListener('input', run);
+    input.addEventListener('focus', () => { if (input.value.trim()) run(); });
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setActive(active + 1); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(active - 1); }
+      else if (e.key === 'Enter') {
+        const items = results.querySelectorAll('.search-item');
+        const target = items[active >= 0 ? active : 0];
+        if (target) location.href = target.getAttribute('href');
+      } else if (e.key === 'Escape') { input.value = ''; close(); input.blur(); }
+    });
+    document.addEventListener('click', (e) => { if (!box.contains(e.target)) close(); });
   }
 
   /* ───── 在 #waifu-tips 气泡里显示一句话（复用 widget 的样式） ───── */

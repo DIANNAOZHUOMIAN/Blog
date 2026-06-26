@@ -3,6 +3,7 @@
 
 import os
 import sys
+import json
 import shutil
 import re
 import time
@@ -103,9 +104,11 @@ def head(title, root=""):
         '<meta http-equiv="Cache-Control" content="no-cache, must-revalidate">\n'
         '<meta http-equiv="Pragma" content="no-cache">\n'
         f'<title>{title}</title>\n'
+        f'<script>window.SITE_ROOT="{root}";</script>\n'
         f'<link rel="stylesheet" href="{root}static/style.css?v={VERSION}">\n'
         '<link rel="stylesheet" href="https://fastly.jsdelivr.net/gh/stevenjoezhang/live2d-widget@latest/waifu.css">\n'
         f'<link rel="alternate" type="application/rss+xml" title="RSS" href="{root}rss.xml">\n'
+        f'<script defer src="{root}static/search-index.js?v={VERSION}"></script>\n'
         '</head>\n'
         '<body data-theme="paper">\n'
         '<header class="site-header">\n'
@@ -117,6 +120,13 @@ def head(title, root=""):
         f'    <a href="{root}index.html">文章</a>\n'
         f'    <a href="{root}tags.html">目录</a>\n'
         '  </nav>\n'
+        '  <div class="search" id="search">\n'
+        '    <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">'
+        '<circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>\n'
+        '    <input type="search" id="search-input" placeholder="搜索文章…" '
+        'autocomplete="off" spellcheck="false" aria-label="搜索文章">\n'
+        '    <div class="search-results" id="search-results" role="listbox"></div>\n'
+        '  </div>\n'
         '  <button id="theme-toggle" type="button" aria-label="切换主题">'
         '<span class="theme-dot"></span><span class="theme-name">纸</span></button>\n'
         '</header>\n'
@@ -198,6 +208,7 @@ def strip_leading_h1(content):
 
 
 def build_index(posts, groups):
+    # 文章卡片（全部文章模块）
     cards = []
     for p in posts:
         c = (
@@ -213,10 +224,63 @@ def build_index(posts, groups):
         c += '</article>'
         cards.append(c)
     items = "\n".join(cards)
+
+    # 简介模块：取 about.md 的摘要与链接
+    about = next((p for p in posts if p["filename"] == "about.md"), None)
+    intro_text = (about["summary"] if about and about["summary"]
+                  else "技术笔记与日常思考的容器，写什么取决于那一刻在想什么。")
+    about_link = (f'<a class="bento-more" href="posts/{about["slug"]}.html">关于本站 →</a>'
+                  if about else "")
+
+    # 标签模块：各分类及篇数
+    tag_items = "".join(
+        f'<li><a href="tags.html#{slugify(name)}">'
+        f'<span class="tag-name">{name}</span>'
+        f'<span class="tag-count">{len(cat_posts)}</span></a></li>'
+        for name, cat_posts in groups
+    )
+
+    # 推荐阅读：最近更新、排除"其他"的前 4 篇
+    rec = [p for p in posts if p["category"] != "其他"][:4]
+    rec_items = "".join(
+        '<a class="rec-item" href="posts/' + p["slug"] + '.html">'
+        f'<span class="cat-badge">{p["category"]}</span>'
+        f'<h3>{p["title"]}</h3>'
+        f'<time>{p["date"]}</time>'
+        '</a>'
+        for p in rec
+    )
+
+    bento = (
+        '<div class="bento">\n'
+        '  <section class="bento-card bento-intro">\n'
+        '    <span class="bento-label">简介</span>\n'
+        '    <h1 class="bento-title">以文字为容器</h1>\n'
+        f'    <p class="bento-text">{intro_text}</p>\n'
+        '    <div class="bento-stats">\n'
+        f'      <span><b>{len(posts)}</b> 篇文章</span>\n'
+        f'      <span><b>{len(groups)}</b> 个分类</span>\n'
+        '    </div>\n'
+        f'    {about_link}\n'
+        '  </section>\n'
+        '  <section class="bento-card bento-tags">\n'
+        '    <span class="bento-label">标签</span>\n'
+        f'    <ul class="bento-taglist">{tag_items}</ul>\n'
+        '  </section>\n'
+        '  <section class="bento-card bento-recommend">\n'
+        '    <span class="bento-label">推荐阅读</span>\n'
+        f'    <div class="rec-grid">{rec_items}</div>\n'
+        '  </section>\n'
+        '  <section class="bento-card bento-articles">\n'
+        '    <span class="bento-label">全部文章</span>\n'
+        f'    <div class="post-list">{items}</div>\n'
+        '  </section>\n'
+        '</div>'
+    )
     return (
         head("博客", root="")
         + render_sidebar(groups, root="", current_slug=None)
-        + f'<main><div class="post-list">{items}</div></main>'
+        + f'<main>{bento}</main>'
         + foot(root="")
     )
 
@@ -303,6 +367,14 @@ def main():
     posts = parse_posts()
     groups = group_by_category(posts)
     print(f"找到 {len(posts)} 篇文章，分 {len(groups)} 类")
+
+    # 搜索索引（标题模糊搜索用），单独成文件便于跨页缓存
+    index = [{"t": p["title"], "s": p["slug"], "c": p["category"]} for p in posts]
+    (DIST / "static" / "search-index.js").write_text(
+        "window.SEARCH_INDEX=" + json.dumps(index, ensure_ascii=False) + ";",
+        encoding="utf-8",
+    )
+    print("✓ static/search-index.js")
 
     (DIST / "index.html").write_text(build_index(posts, groups), encoding="utf-8")
     print("✓ index.html")

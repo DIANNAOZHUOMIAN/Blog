@@ -37,6 +37,12 @@ body[data-theme="ink"] {
   --main-w:730px;
   --side-w:264px;
   --header-h:60px;
+  /* 圆角 & 间距尺度（统一） */
+  --radius:16px;
+  --radius-md:12px;
+  --radius-sm:8px;
+  --gap:1rem;
+  --pad-card:1.5rem;
 }
 
 html { scroll-behavior:smooth; }
@@ -86,6 +92,56 @@ a:hover { color:var(--accent); }
 }
 .header-nav a:hover { color:var(--ink); }
 
+/* 搜索框 */
+.search { position:relative; display:flex; align-items:center; margin:0 0.9rem 0 1rem; }
+.search-icon {
+  position:absolute; left:0.7rem; width:15px; height:15px;
+  stroke:var(--ink-3); stroke-width:2; fill:none; stroke-linecap:round;
+  pointer-events:none;
+}
+#search-input {
+  width:170px; max-width:42vw;
+  font-family:var(--sans); font-size:0.82rem; color:var(--ink);
+  background:var(--paper-2);
+  border:1px solid var(--rule-2);
+  border-radius:999px;
+  padding:0.4rem 0.85rem 0.4rem 2rem;
+  outline:none;
+  transition:border-color 0.18s, width 0.25s, background 0.18s;
+}
+#search-input::placeholder { color:var(--ink-3); }
+#search-input:focus { border-color:var(--accent); width:230px; background:var(--paper); }
+.search-results {
+  position:absolute; top:calc(100% + 0.5rem); right:0;
+  width:340px; max-width:80vw; max-height:62vh; overflow-y:auto;
+  background:var(--paper);
+  border:1px solid var(--rule-2);
+  border-radius:var(--radius-md);
+  box-shadow:0 12px 32px rgba(0,0,0,0.14);
+  padding:0.35rem; display:none; z-index:200;
+}
+.search.open .search-results { display:block; }
+.search-item {
+  display:flex; align-items:center; gap:0.6rem;
+  padding:0.5rem 0.6rem; border-radius:var(--radius-sm);
+  transition:background 0.12s;
+}
+.search-item:hover, .search-item.active { background:var(--paper-2); }
+.search-cat {
+  font-family:var(--sans); font-size:0.66rem; color:var(--accent);
+  border:1px solid var(--accent); padding:0.05em 0.5em; border-radius:999px;
+  white-space:nowrap; opacity:0.85; flex-shrink:0;
+}
+.search-title {
+  font-family:var(--serif); font-size:0.9rem; color:var(--ink);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.search-title mark { background:transparent; color:var(--accent); font-weight:600; }
+.search-empty {
+  padding:0.85rem; text-align:center;
+  font-family:var(--sans); font-size:0.82rem; color:var(--ink-3);
+}
+
 /* 主题按钮 */
 #theme-toggle {
   background:transparent;
@@ -134,7 +190,7 @@ a:hover { color:var(--accent); }
   z-index:50;
 }
 
-/* ───── 侧栏与正文之间的装饰分隔（鼠标交互 + 随主题变色） ───── */
+/* ───── 侧栏与正文之间的装饰分隔（鼠标交互 + 拖拽改宽 + 随主题变色） ───── */
 .divider {
   position:fixed;
   top:var(--header-h);
@@ -142,10 +198,19 @@ a:hover { color:var(--accent); }
   bottom:0;
   width:18px;            /* 交互热区宽度 */
   z-index:55;
-  pointer-events:none;   /* 纯装饰，不拦截点击 */
+  pointer-events:auto;
+  cursor:col-resize;     /* 提示可左右拖拽改变目录宽度 */
   --gy:50%;              /* 鼠标 Y（JS 更新） */
   --glow:0;              /* 鼠标靠近强度 0~1（JS 更新） */
 }
+/* 悬停 / 拖拽时强化竖线，给出可调宽度的反馈 */
+.divider:hover::before,
+body.resizing-sidebar .divider::before {
+  width:2px;
+  background:linear-gradient(to bottom,
+    transparent, var(--accent) 12%, var(--accent) 88%, transparent);
+}
+body.resizing-sidebar { cursor:col-resize; user-select:none; }
 /* 竖线本体：上下淡出的渐变细线 */
 .divider::before {
   content:"";
@@ -274,6 +339,115 @@ main > * {
   color:var(--ink-2); font-weight:300; line-height:1.7;
 }
 
+/* ───── 首页 Bento 模块布局 ───── */
+.bento {
+  max-width:1100px;
+  display:grid;
+  grid-template-columns:repeat(6, 1fr);
+  gap:var(--gap);
+}
+.bento-card {
+  background:var(--paper-2);
+  border:1px solid var(--rule);
+  border-radius:var(--radius);
+  padding:var(--pad-card);
+}
+.bento-label {
+  display:inline-block;
+  font-family:var(--sans); font-size:0.68rem; letter-spacing:0.18em;
+  text-transform:uppercase; color:var(--ink-3);
+  margin-bottom:0.9rem;
+}
+.bento-intro { grid-column:span 4; display:flex; flex-direction:column; }
+.bento-tags { grid-column:span 2; }
+.bento-recommend { grid-column:span 6; }
+.bento-articles { grid-column:span 6; }
+
+.bento-title {
+  font-family:var(--serif); font-size:1.9rem; font-weight:400;
+  letter-spacing:-0.02em; margin-bottom:0.6rem; line-height:1.25;
+}
+.bento-text {
+  font-family:var(--sans); font-size:0.92rem; font-weight:300;
+  color:var(--ink-2); line-height:1.85; max-width:46ch;
+}
+.bento-stats { display:flex; gap:1.8rem; margin-top:auto; padding-top:1.4rem; }
+.bento-stats span { font-family:var(--sans); font-size:0.8rem; color:var(--ink-3); }
+.bento-stats b {
+  font-family:var(--mono); font-size:1.4rem; font-weight:400;
+  color:var(--ink); margin-right:0.35rem;
+}
+.bento-more {
+  display:inline-block; margin-top:1rem;
+  font-family:var(--sans); font-size:0.82rem; color:var(--accent);
+  transition:opacity 0.15s;
+}
+.bento-more:hover { opacity:0.7; }
+
+.bento-taglist { list-style:none; display:flex; flex-direction:column; gap:0.2rem; }
+.bento-taglist a {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:0.45rem 0.7rem; border-radius:var(--radius-sm);
+  font-family:var(--sans); font-size:0.88rem; color:var(--ink-2);
+  transition:background 0.12s, color 0.12s;
+}
+.bento-taglist a:hover { background:var(--paper); color:var(--accent); }
+.tag-count {
+  font-family:var(--mono); font-size:0.72rem; color:var(--ink-3);
+  background:var(--paper); border:1px solid var(--rule);
+  border-radius:999px; padding:0.05em 0.55em; min-width:1.9em; text-align:center;
+  transition:color 0.12s, border-color 0.12s;
+}
+.bento-taglist a:hover .tag-count { color:var(--accent); border-color:var(--accent); }
+
+.rec-grid {
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr));
+  gap:var(--gap);
+}
+.rec-item {
+  display:flex; flex-direction:column; gap:0.55rem;
+  background:var(--paper); border:1px solid var(--rule);
+  border-radius:var(--radius-md); padding:1rem 1.1rem;
+  transition:transform 0.16s, border-color 0.16s, box-shadow 0.16s;
+}
+.rec-item:hover {
+  transform:translateY(-3px); border-color:var(--rule-2);
+  box-shadow:0 8px 22px rgba(0,0,0,0.07);
+}
+.rec-item .cat-badge { align-self:flex-start; }
+.rec-item h3 {
+  font-family:var(--serif); font-size:1rem; font-weight:400;
+  line-height:1.4; color:var(--ink);
+}
+.rec-item time { font-family:var(--mono); font-size:0.72rem; color:var(--ink-3); }
+
+.bento-articles .post-list {
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(258px, 1fr));
+  gap:var(--gap);
+}
+.bento-articles .post-card {
+  padding:1.1rem 1.2rem;
+  background:var(--paper);
+  border:1px solid var(--rule);
+  border-radius:var(--radius-md);
+  transition:transform 0.16s, border-color 0.16s, box-shadow 0.16s;
+}
+.bento-articles .post-card:first-child { padding-top:1.1rem; }
+.bento-articles .post-card:hover {
+  transform:translateY(-3px); border-color:var(--rule-2);
+  box-shadow:0 8px 22px rgba(0,0,0,0.07);
+}
+.bento-articles .post-card h2 { font-size:1.05rem; }
+
+@media (max-width:980px) {
+  .bento { grid-template-columns:repeat(4, 1fr); }
+  .bento-intro, .bento-tags,
+  .bento-recommend, .bento-articles { grid-column:1 / -1; }
+}
+@media (max-width:560px) {
+  .rec-grid, .bento-articles .post-list { grid-template-columns:1fr; }
+}
+
 .post-full { max-width:var(--main-w); }
 .post-header {
   padding-bottom:1.6rem;
@@ -308,11 +482,11 @@ main > * {
 .post-body code {
   font-family:var(--mono); font-size:0.85em;
   background:var(--code-bg);
-  padding:0.15em 0.4em; border-radius:3px;
+  padding:0.15em 0.4em; border-radius:var(--radius-sm);
 }
 .post-body pre {
   background:var(--code-bg);
-  padding:1rem 1.2rem; border-radius:6px;
+  padding:1rem 1.2rem; border-radius:var(--radius-md);
   overflow-x:auto; margin:1.4rem 0;
   border:1px solid var(--rule);
 }
@@ -367,7 +541,7 @@ main > * {
   border:1px solid var(--rule); text-align:left;
 }
 .post-body th { background:var(--code-bg); font-weight:600; }
-.post-body img { max-width:100%; border-radius:4px; margin:1.5rem 0; }
+.post-body img { max-width:100%; border-radius:var(--radius-sm); margin:1.5rem 0; }
 
 .back-link {
   display:inline-block; margin-top:2.5rem;
@@ -443,11 +617,14 @@ main > * {
 @media (max-width:600px) {
   html { font-size:16px; }
   .site-header { padding:0 1rem; }
-  .header-nav { gap:1.2rem; margin-left:1rem; }
-  .header-nav a { font-size:0.76rem; }
+  .header-nav { display:none; }           /* 让位给搜索框，目录用 ☰ */
+  .search { margin:0 0.5rem 0 auto; }
+  #search-input { width:118px; padding-left:1.9rem; }
+  #search-input:focus { width:150px; }
   main { padding:2rem 1.2rem 4rem; }
   .post-card h2 { font-size:1.2rem; }
   .tag-post-list li { flex-direction:column; gap:0.2rem; }
+  .bento-articles .post-card h2 { font-size:1.05rem; }
 }
 
 /* Live2D 桌宠 */
