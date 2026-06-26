@@ -164,6 +164,10 @@ def render_sidebar(groups, root="", current_slug=None):
         out.append('</details>')
     out.append('</nav>')
     out.append('</aside>')
+    out.append(
+        '<div class="divider" id="divider" aria-hidden="true">'
+        '<span class="divider-seal"></span></div>'
+    )
     return "\n".join(out)
 
 

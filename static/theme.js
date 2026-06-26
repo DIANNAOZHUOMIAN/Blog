@@ -3,7 +3,6 @@
   const THEMES = [
     { id: 'paper',  name: '纸' },
     { id: 'ink',    name: '墨' },
-    { id: 'sakura', name: '樱' },
   ];
 
   function init() {
@@ -99,6 +98,31 @@
 
     enablePetDrag();
     guardPetSwitching();
+    initDivider();
+  }
+
+  /* ───── 侧栏 / 正文之间的装饰分隔条：光晕随鼠标，颜色随主题 ───── */
+  function initDivider() {
+    const d = document.getElementById('divider');
+    if (!d) return;
+    let raf = 0, mx = 0, my = 0;
+
+    function update() {
+      raf = 0;
+      const rect = d.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      // 离分隔条越近，光晕越强（140px 内渐显）
+      const glow = Math.max(0, 1 - Math.abs(mx - cx) / 140);
+      d.style.setProperty('--gy', (my - rect.top) + 'px');
+      d.style.setProperty('--glow', glow.toFixed(3));
+    }
+
+    window.addEventListener('mousemove', (e) => {
+      mx = e.clientX; my = e.clientY;
+      if (!raf) raf = requestAnimationFrame(update);   // 节流到每帧一次
+    }, { passive: true });
+
+    document.addEventListener('mouseleave', () => d.style.setProperty('--glow', '0'));
   }
 
   /* ───── 在 #waifu-tips 气泡里显示一句话（复用 widget 的样式） ───── */

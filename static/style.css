@@ -30,23 +30,6 @@ body[data-theme="ink"] {
   --syn-builtin:#8fb8d8; --syn-op:#b0b0a8;      --syn-punc:#9a9a92;
   --syn-name:#d8d6d0;    --syn-attr:#d9a86a;    --syn-deco:#c8a6e0;
 }
-body[data-theme="sakura"] {
-  --ink:#4a3540; --ink-2:#806572; --ink-3:#b59ba8;
-  --paper:#fff7f9; --paper-2:#fce8ef;
-  --rule:#f3dde5; --rule-2:#e8c0d0;
-  --accent:#e85a7a; --code-bg:#fce8ef;
-  --header-bg: rgba(255,247,249,0.92);
-  --bg-image:
-    radial-gradient(circle at 15% 25%, rgba(232,90,122,0.10), transparent 55%),
-    radial-gradient(circle at 85% 75%, rgba(255,200,220,0.18), transparent 55%),
-    radial-gradient(circle at 50% 100%, rgba(255,230,235,0.4), transparent 70%);
-  --theme-dot:#e85a7a;
-  --syn-comment:#bda4b2; --syn-keyword:#d6336c; --syn-string:#3f8f5a;
-  --syn-number:#c2772f;  --syn-func:#3f6fb0;    --syn-type:#9a4fb0;
-  --syn-builtin:#3f6fb0; --syn-op:#8a6b7a;      --syn-punc:#9a7b8a;
-  --syn-name:#4a3540;    --syn-attr:#c2772f;    --syn-deco:#9a4fb0;
-}
-
 :root {
   --serif:'Noto Serif SC','Source Han Serif SC',serif;
   --sans:'Noto Sans SC','PingFang SC',sans-serif;
@@ -148,8 +131,51 @@ a:hover { color:var(--accent); }
   padding:1.6rem 1rem 1.6rem 1.5rem;
   overflow-y:auto;
   background:transparent;
-  border-right:1px solid var(--rule);
   z-index:50;
+}
+
+/* ───── 侧栏与正文之间的装饰分隔（鼠标交互 + 随主题变色） ───── */
+.divider {
+  position:fixed;
+  top:var(--header-h);
+  left:calc(var(--side-w) - 9px);
+  bottom:0;
+  width:18px;            /* 交互热区宽度 */
+  z-index:55;
+  pointer-events:none;   /* 纯装饰，不拦截点击 */
+  --gy:50%;              /* 鼠标 Y（JS 更新） */
+  --glow:0;              /* 鼠标靠近强度 0~1（JS 更新） */
+}
+/* 竖线本体：上下淡出的渐变细线 */
+.divider::before {
+  content:"";
+  position:absolute;
+  left:50%; top:0; bottom:0;
+  width:1px; transform:translateX(-50%);
+  background:linear-gradient(to bottom,
+    transparent, var(--rule-2) 10%, var(--rule-2) 90%, transparent);
+}
+/* 跟随鼠标的竖向光晕 */
+.divider::after {
+  content:"";
+  position:absolute;
+  left:50%; top:var(--gy);
+  width:3px; height:180px;
+  transform:translate(-50%,-50%);
+  background:linear-gradient(to bottom, transparent, var(--accent), transparent);
+  opacity:calc(0.06 + var(--glow) * 0.6);
+  filter:blur(calc(1px + var(--glow) * 2px));
+}
+/* 居中印章式装饰，靠近时点亮 */
+.divider-seal {
+  position:absolute;
+  left:50%; top:50%;
+  width:7px; height:7px;
+  background:var(--accent);
+  transform:translate(-50%,-50%) rotate(45deg) scale(calc(1 + var(--glow) * 0.6));
+  opacity:calc(0.4 + var(--glow) * 0.6);
+  box-shadow:0 0 calc(var(--glow) * 14px) var(--accent);
+  transition:transform 0.18s ease-out, opacity 0.18s, box-shadow 0.18s;
 }
 .sidebar::-webkit-scrollbar { width:6px; }
 .sidebar::-webkit-scrollbar-thumb { background:var(--rule-2); border-radius:3px; }
@@ -412,6 +438,7 @@ main > * {
   main { margin-left:0; }
   .site-footer { margin-left:0; }
   #sidebar-toggle { display:inline-block; }
+  .divider { display:none; }   /* 移动端侧栏收起，隐藏分隔条 */
 }
 @media (max-width:600px) {
   html { font-size:16px; }
