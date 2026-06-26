@@ -5,6 +5,35 @@
     { id: 'ink',    name: '墨' },
   ];
 
+  /* ───── 桌宠模型固定：切换文章时不再随机换装 ─────
+     上游 widget 每次加载都会对多套服装的模型随机选一套（e(models[id])），
+     于是每翻一篇文章桌宠就换一次。这里包住 loadlive2d：页面初始化那一次
+     沿用"上次显示的模型"，手动切换/换装仍照常生效并更新记忆。
+     必须在 live2d.min.js（window.loadlive2d=L）执行前装好，故同步运行。 */
+  (function pinPetModel() {
+    const KEY = 'waifu-model-url';
+    let real = null, pinnedThisLoad = false;
+    function wrapped() {
+      const args = Array.prototype.slice.call(arguments);
+      if (args[0] === 'live2d' && args[1]) {
+        if (!pinnedThisLoad) {                 // 初始化加载：优先用上次的模型
+          const saved = localStorage.getItem(KEY);
+          if (saved) args[1] = saved;
+          pinnedThisLoad = true;
+        }
+        try { localStorage.setItem(KEY, args[1]); } catch (_) {}
+      }
+      return real ? real.apply(window, args) : undefined;
+    }
+    try {
+      Object.defineProperty(window, 'loadlive2d', {
+        configurable: true,
+        get() { return wrapped; },
+        set(v) { real = v; },          // live2d.min.js 赋值时捕获真函数
+      });
+    } catch (_) {}
+  })();
+
   function init() {
     const body  = document.body;
     const btn   = document.getElementById('theme-toggle');

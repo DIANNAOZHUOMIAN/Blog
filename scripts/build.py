@@ -240,8 +240,11 @@ def build_index(posts, groups):
         for name, cat_posts in groups
     )
 
-    # 推荐阅读：最近更新、排除"其他"的前 4 篇
-    rec = [p for p in posts if p["category"] != "其他"][:4]
+    # 推荐阅读：固定四篇（C# 新特性、Prism、SqlSugar、CAN）
+    rec_files = ["csharp-whats-new.md", "design-prism.md",
+                 "orm-sqlsugar.md", "comm-can.md"]
+    by_file = {p["filename"]: p for p in posts}
+    rec = [by_file[f] for f in rec_files if f in by_file]
     rec_items = "".join(
         '<a class="rec-item" href="posts/' + p["slug"] + '.html">'
         f'<span class="cat-badge">{p["category"]}</span>'
