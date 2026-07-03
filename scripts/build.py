@@ -433,7 +433,7 @@ def build_mindmap(groups):
         '      <button type="button" data-act="out" title="缩小">－</button>\n'
         '      <button type="button" data-act="fit" title="适应画布">⤢</button>\n'
         '    </div>\n'
-        '    <div class="mm-hint">拖拽平移 · 滚轮缩放 · 单击展开/收起 · 双击跳转文章</div>\n'
+        '    <div class="mm-hint">拖拽平移 · 滚轮缩放看细节 · 单击展开/收起 · 双击跳转文章</div>\n'
         '  </div>\n'
         '</div>\n'
         '</main>\n'

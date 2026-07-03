@@ -795,24 +795,43 @@ main { animation:fade-up 0.4s ease both; }
   pointer-events:none; user-select:none;
 }
 
-/* 导图节点（SVG） */
-.mm-link { fill:none; stroke-width:1.6; opacity:0.55; }
-.mm-node { user-select:none; }
-.mm-node.mm-toggleable { cursor:pointer; }
-.mm-rect-root { stroke:none; }
-.mm-text { fill:var(--ink); }
-.mm-text-d0 { fill:var(--paper); }
-.mm-text-d2 { fill:var(--ink-2); }
-.mm-rect-post {
-  fill-opacity:0.09; stroke-width:1.4;
-  transition:fill-opacity 0.15s;
+/* 导图节点（SVG）：放射状星图 */
+.mm-link {
+  fill:none; stroke-width:1.4; opacity:0.4;
+  transition:opacity 0.15s, stroke-width 0.15s;
 }
-.mm-node:hover .mm-rect-post { fill-opacity:0.2; }
-.mm-underline { stroke-width:1.6; opacity:0.75; }
-.mm-underline-3 { stroke-width:1.2; opacity:0.45; }
-.mm-hit { fill:transparent; }
-.mm-text-d3 { fill:var(--ink-3); }
-.mm-node:hover .mm-text { fill:var(--ink); }
+.mm-node { user-select:none; transition:opacity 0.15s; }
+.mm-node.mm-toggleable { cursor:pointer; }
+.mm-hitc { fill:transparent; }
+.mm-dot { fill:var(--c); transition:filter 0.15s; }
+.mm-d2 .mm-dot { opacity:0.85; }
+.mm-d3 .mm-dot { opacity:0.7; }
+.mm-ring { fill:none; stroke:var(--c); stroke-width:1; opacity:0.5; }
+.mm-root-pill { fill:var(--mm-root); }
+.mm-root-label { fill:var(--paper); }
+/* 标签描一圈画布底色，压在连线/圆点上也可读 */
+.mm-label {
+  fill:var(--ink);
+  paint-order:stroke; stroke:var(--paper-2);
+  stroke-width:3px; stroke-linejoin:round;
+}
+.mm-label-d2 { fill:var(--ink-2); }
+.mm-label-d3 { fill:var(--ink-3); }
+.mm-count { fill:var(--ink-3); font-size:9px; }
+
+/* 缩放层级：看形不看字，放大逐级显示二/三级标签 */
+.mm-label-d2, .mm-label-d3 { opacity:0; transition:opacity 0.25s; }
+#mm-svg[data-z="2"] .mm-label-d2 { opacity:1; }
+#mm-svg[data-z="3"] .mm-label-d2,
+#mm-svg[data-z="3"] .mm-label-d3 { opacity:1; }
+
+/* 悬停高亮：点亮根→节点路径与其子树，其余淡出 */
+#mm-svg.mm-focus .mm-link { opacity:0.07; }
+#mm-svg.mm-focus .mm-node { opacity:0.18; }
+#mm-svg.mm-focus .mm-link.lit { opacity:0.95; stroke-width:1.8; }
+#mm-svg.mm-focus .mm-node.lit { opacity:1; }
+#mm-svg.mm-focus .mm-node.lit .mm-label { opacity:1; }  /* 高亮分支的标签强制可见 */
+.mm-node.lit .mm-dot { filter:drop-shadow(0 0 5px var(--c)); }
 
 /* 悬停提示：所属文章 + 双击跳转 */
 .mm-tip {
@@ -847,20 +866,6 @@ main { animation:fade-up 0.4s ease both; }
   margin-top:0.3rem;
   font-size:0.68rem; color:var(--ink-3); letter-spacing:0.03em;
 }
-.mm-toggle circle {
-  fill:var(--paper); stroke-width:1.4;
-  transition:fill 0.15s;
-}
-.mm-toggle text {
-  fill:var(--ink-2);
-  font-family:var(--mono); font-size:10px;
-}
-.mm-node:hover .mm-toggle circle { fill:var(--paper-2); }
-.mm-open-bg { fill:transparent; transition:fill 0.15s; }
-.mm-open-icon { fill:var(--ink-3); font-size:12px; transition:fill 0.15s; }
-.mm-open:hover .mm-open-bg { fill:var(--paper); }
-.mm-open:hover .mm-open-icon { fill:var(--accent); }
-
 @media (max-width:600px) {
   .mindmap-main { padding:1rem 0.8rem 1.5rem; }
   .mm-viewport { height:calc(100vh - var(--header-h) - 11rem); min-height:340px; }
