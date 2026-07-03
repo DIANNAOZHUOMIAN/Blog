@@ -809,6 +809,44 @@ main { animation:fade-up 0.4s ease both; }
 }
 .mm-node:hover .mm-rect-post { fill-opacity:0.2; }
 .mm-underline { stroke-width:1.6; opacity:0.75; }
+.mm-underline-3 { stroke-width:1.2; opacity:0.45; }
+.mm-hit { fill:transparent; }
+.mm-text-d3 { fill:var(--ink-3); }
+.mm-node:hover .mm-text { fill:var(--ink); }
+
+/* 悬停提示：所属文章 + 双击跳转 */
+.mm-tip {
+  position:absolute; left:0; top:0; z-index:8;
+  max-width:300px;
+  background:var(--paper);
+  border:1px solid var(--rule-2);
+  border-radius:var(--radius-sm);
+  box-shadow:0 8px 24px rgba(0,0,0,0.12);
+  padding:0.5rem 0.7rem;
+  font-family:var(--sans);
+  pointer-events:none;
+  opacity:0; visibility:hidden;
+  transition:opacity 0.12s;
+}
+.mm-tip.show { opacity:1; visibility:visible; }
+.mm-tip-name {
+  font-size:0.8rem; color:var(--ink); line-height:1.5;
+  margin-bottom:0.25rem;
+}
+.mm-tip-post {
+  font-size:0.78rem; color:var(--ink-2); line-height:1.5;
+  display:flex; align-items:baseline; gap:0.45rem;
+}
+.mm-tip-post span {
+  flex-shrink:0;
+  font-size:0.62rem; color:var(--accent);
+  border:1px solid var(--accent); border-radius:999px;
+  padding:0 0.45em; opacity:0.85;
+}
+.mm-tip-hint {
+  margin-top:0.3rem;
+  font-size:0.68rem; color:var(--ink-3); letter-spacing:0.03em;
+}
 .mm-toggle circle {
   fill:var(--paper); stroke-width:1.4;
   transition:fill 0.15s;

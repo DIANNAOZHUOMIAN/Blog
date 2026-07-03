@@ -189,16 +189,44 @@ def render_md(content):
             "codehilite": {
                 "guess_lang": False,   # 没标语言的代码块不猜测，保持纯文本
                 "css_class": "codehilite",
-            }
+            },
+            # 与导图数据共用同一套锚点算法，保证「双击跳转到章节」定位准确
+            "toc": {"slugify": toc_slugify},
         },
     )
     return md.convert(content)
 
 
-def extract_headings(content):
-    """提取正文里的二级标题（跳过代码块），作为思维导图的知识点节点。"""
-    heads = []
+IDCOUNT_RE = re.compile(r"^(.*)_([0-9]+)$")
+
+def toc_slugify(value, separator="-"):
+    """标题 → 锚点 id。保留中文，供 toc 扩展与导图数据共用，保证两边一致。"""
+    value = value.lower()
+    value = re.sub(r"[^\w一-鿿]+", separator, value)
+    value = value.strip(separator)
+    value = re.sub(re.escape(separator) + "{2,}", separator, value)
+    return value or "section"
+
+def _unique_id(id_, ids):
+    """与 markdown toc 扩展的去重规则一致：重复时追加 _1、_2 …"""
+    while id_ in ids or not id_:
+        m = IDCOUNT_RE.match(id_)
+        id_ = f"{m.group(1)}_{int(m.group(2)) + 1}" if m else f"{id_}_1"
+    ids.add(id_)
+    return id_
+
+def _clean_heading(t):
+    t = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", t)   # 链接 → 文本
+    t = re.sub(r"[*_`]", "", t)                       # 去掉强调/行内代码标记
+    t = re.sub(r"\\(.)", r"\1", t)                    # 还原 \< \> 等转义
+    return t.strip()
+
+def extract_outline(content):
+    """提取二/三级标题（跳过代码块）及其锚点，作为导图的知识点层级。"""
+    ids = set()
+    outline = []
     in_code = False
+    h1_skipped = False
     for line in content.split("\n"):
         s = line.strip()
         if s.startswith("```"):
@@ -206,14 +234,20 @@ def extract_headings(content):
             continue
         if in_code:
             continue
-        m = re.match(r"^##\s+(.+)$", s)
-        if m:
-            t = m.group(1).strip()
-            t = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", t)   # 链接 → 文本
-            t = re.sub(r"[*_`]", "", t)                       # 去掉强调/行内代码标记
-            t = re.sub(r"\\(.)", r"\1", t)                    # 还原 \< \> 等转义
-            heads.append(t)
-    return heads
+        m = re.match(r"^(#{1,6})\s+(.+)$", s)
+        if not m:
+            continue
+        level = len(m.group(1))
+        text = _clean_heading(m.group(2))
+        if level == 1 and not h1_skipped:
+            h1_skipped = True          # 正文首个 H1 渲染前会被去掉，不占锚点
+            continue
+        anchor = _unique_id(toc_slugify(text), ids)   # 其余级别也计数，保持锚点同步
+        if level == 2:
+            outline.append({"t": text, "a": anchor, "c": []})
+        elif level == 3 and outline:
+            outline[-1]["c"].append({"t": text, "a": anchor})
+    return outline
 
 
 def strip_leading_h1(content):
@@ -342,10 +376,11 @@ def build_tags(posts, groups):
             f'<time>{p["date"]}</time></li>'
             for p in cat_posts
         )
+        mm_link = ('' if cat_name == "其他" else
+                   f'<a class="tag-mm-link" href="mindmap.html#{sid}">导图 →</a>')
         sections.append(
             f'<section class="tag-section" id="{sid}">'
-            f'<h2 class="tag-heading">{cat_name}'
-            f'<a class="tag-mm-link" href="mindmap.html#{sid}">导图 →</a></h2>'
+            f'<h2 class="tag-heading">{cat_name}{mm_link}</h2>'
             f'<ul class="tag-post-list">{items}</ul>'
             f'</section>'
         )
@@ -358,15 +393,20 @@ def build_tags(posts, groups):
     )
 
 
+def mindmap_groups(groups):
+    """「其他」是杂项（关于页等），不值得成图，导图里排除。"""
+    return [(name, ps) for name, ps in groups if name != "其他"]
+
+
 def build_mindmap_data(groups):
-    """每个分类一棵树：分类 → 文章 → 二级标题（知识点）。"""
+    """每个分类一棵树：分类 → 文章 → 二级标题 → 三级标题。"""
     data = []
-    for cat_name, cat_posts in groups:
+    for cat_name, cat_posts in mindmap_groups(groups):
         data.append({
             "name": cat_name,
             "id":   slugify(cat_name),
             "posts": [
-                {"t": p["title"], "s": p["slug"], "h": extract_headings(p["content"])}
+                {"t": p["title"], "s": p["slug"], "h": extract_outline(p["content"])}
                 for p in cat_posts
             ],
         })
@@ -377,7 +417,7 @@ def build_mindmap(groups):
     tabs = "".join(
         f'<button class="mm-tab" type="button" data-id="{slugify(name)}">'
         f'{name}<span class="mm-tab-n">{len(cat_posts)}</span></button>'
-        for name, cat_posts in groups
+        for name, cat_posts in mindmap_groups(groups)
     )
     page = (
         '<main class="mindmap-main">\n'
@@ -393,7 +433,7 @@ def build_mindmap(groups):
         '      <button type="button" data-act="out" title="缩小">－</button>\n'
         '      <button type="button" data-act="fit" title="适应画布">⤢</button>\n'
         '    </div>\n'
-        '    <div class="mm-hint">拖拽平移 · 滚轮缩放 · 点击节点展开/收起 · ↗ 打开文章</div>\n'
+        '    <div class="mm-hint">拖拽平移 · 滚轮缩放 · 单击展开/收起 · 双击跳转文章</div>\n'
         '  </div>\n'
         '</div>\n'
         '</main>\n'
