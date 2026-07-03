@@ -36,7 +36,7 @@ summary: 一句话摘要（显示在首页）
 ## 本地预览
 
 ```bash
-# 安装依赖（只需一次）
+# 安装依赖
 pip install markdown python-frontmatter
 
 # 构建
@@ -99,4 +99,4 @@ server {
 }
 ```
 
-Cloudflare DNS：A 记录 → `204.152.198.206`，橙色云朵开启，回源端口 2096。
+Cloudflare DNS：A 记录 → `服务器ip`，橙色云朵开启，回源端口 2096。
