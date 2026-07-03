@@ -1,62 +1,71 @@
 /* 思维导图：分类 → 文章 → 二级标题 → 三级标题
-   放射状「星图 / 烟花」布局（参考 Obsidian 知识图谱）：
-   分类居中，文章呈 360° 散开，知识点在外环展开。
-   滚轮缩放（放大逐级显示标签）、拖拽平移、单击展开/收起、
-   悬停高亮所在分支并提示所属文章、双击跳转到文章对应章节。 */
+   3D 星云视图（Canvas 手写投影，无依赖）：
+   分类是发光核心，文章是环绕的恒星（斐波那契球面均匀分布），
+   知识点像星团聚在各自文章周围，带彩色星云雾、星尘与景深。
+   拖拽旋转、滚轮缩放、悬停点亮分支并显示标签、
+   单击展开/收起、双击跳转到文章对应章节。 */
 (function () {
   'use strict';
 
-  const data = window.MINDMAP_DATA;
-  const svg      = document.getElementById('mm-svg');
+  const data     = window.MINDMAP_DATA;
+  const canvas   = document.getElementById('mm-canvas');
   const viewport = document.getElementById('mm-viewport');
   const tabsBox  = document.getElementById('mm-tabs');
-  if (!Array.isArray(data) || !data.length || !svg || !viewport) return;
+  if (!Array.isArray(data) || !data.length || !canvas || !viewport) return;
 
-  const NS   = 'http://www.w3.org/2000/svg';
+  const ctx  = canvas.getContext('2d');
   const ROOT = window.SITE_ROOT || '';
   const TAU  = Math.PI * 2;
+  const GOLD = Math.PI * (3 - Math.sqrt(5));   // 黄金角
 
-  /* 分支配色（CSS 变量随 paper/ink 主题切换） */
-  const COLORS = ['--mm-c1','--mm-c2','--mm-c3','--mm-c4',
-                  '--mm-c5','--mm-c6','--mm-c7','--mm-c8'];
+  /* 星云配色（深空背景固定，不随主题切换——星云需要夜空） */
+  const PALETTE = ['#ffb27a', '#7ec8ff', '#a8e08a', '#ffd36b',
+                   '#c9a6ff', '#6fe0d0', '#ff9fc8', '#b0b8c8'];
+  const BG0 = '#171a26', BG1 = '#0b0c12';
+  const CORE = '#ffe9c4';
+  const INK  = '#e3e6ef', INK2 = '#b8bdcc', INK3 = '#828a9e';
+  const HALO = 'rgba(9,10,16,0.85)';
 
   const cs    = getComputedStyle(document.documentElement);
   const SANS  = (cs.getPropertyValue('--sans')  || 'sans-serif').trim();
   const SERIF = (cs.getPropertyValue('--serif') || 'serif').trim();
-  const FONT = {
-    0: '400 20px ' + SERIF,
+  const FONT  = {
+    0: '400 21px ' + SERIF,
     1: '400 13px ' + SANS,
     2: '300 11px ' + SANS,
     3: '300 10px ' + SANS,
   };
-  const LABEL_MAX = { 0: 420, 1: 230, 2: 200, 3: 180 };   // 标签超宽截断
-  const DOT       = { 1: 7, 2: 3.5, 3: 2.5 };             // 圆点基准半径
+  const LABEL_MAX = { 0: 420, 1: 220, 2: 190, 3: 170 };
+  const CORE_R    = { 1: 5, 2: 2.8, 3: 2 };      // 恒星核半径（世界像素）
 
-  const measureCtx = document.createElement('canvas').getContext('2d');
-  function textWidth(text, d) {
-    measureCtx.font = FONT[d];
-    return measureCtx.measureText(text).width;
-  }
+  const REDUCED = window.matchMedia &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
   function fitText(text, d) {
-    const max = LABEL_MAX[d];
-    if (textWidth(text, d) <= max) return text;
+    ctx.font = FONT[d];
+    if (ctx.measureText(text).width <= LABEL_MAX[d]) return text;
     let t = text;
-    while (t.length > 1 && textWidth(t + '…', d) > max) t = t.slice(0, -1);
+    while (t.length > 1 && ctx.measureText(t + '…').width > LABEL_MAX[d]) {
+      t = t.slice(0, -1);
+    }
     return t + '…';
   }
 
   /* ───── 状态 ───── */
-  let cat = null;                       // 当前分类数据
-  let expanded = new Map();             // catId -> Set(展开的节点 id)
-  let tx = 0, ty = 0, k = 1;            // 平移 / 缩放
-  let world = null;                     // <g> 世界容器
-  let panning = false;
-  let bounds = null;                    // 本次布局的包围盒（含标签）
-  let focusEls = [];                    // 悬停高亮中的元素
+  let cat = null;
+  let expanded = new Map();              // catId -> Set(展开的节点 id)
+  let nodes = [], links = [], stars = [], hazes = [];
+  let R1 = 280, R2 = 500;
+  let yaw = -0.5, pitch = 0.26, dist = 1400;
+  const F = 900;                          // 焦距
+  let W = 0, H = 0, dpr = 1;
+  let hover = null, litSet = null;
+  let dragging = false, moved = false, clickTimer = 0;
+  let lastT = 0;
 
   function expandSet() {
     if (!expanded.has(cat.id)) {
-      // 默认展开到二级标题：根 + 所有文章节点，一打开就是完整星图
+      // 默认展开到二级标题：核心 + 所有文章，一打开就是完整星云
       const set = new Set(['root']);
       cat.posts.forEach(p => set.add(p.s));
       expanded.set(cat.id, set);
@@ -64,139 +73,374 @@
     return expanded.get(cat.id);
   }
 
-  /* ───── 树构建 ───── */
-  function buildTree() {
+  /* ───── 确定性伪随机（切分类/刷新时星空稳定不闪） ───── */
+  function lcg(seed) {
+    let s = seed >>> 0 || 1;
+    return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296;
+  }
+  function hashStr(str) {
+    let h = 2166136261;
+    for (let i = 0; i < str.length; i++) {
+      h = (h ^ str.charCodeAt(i)) * 16777619 >>> 0;
+    }
+    return h;
+  }
+
+  /* ───── 3D 布局 ───── */
+  function basis(u) {
+    // u 的正交基（u 为单位向量）
+    const a = Math.abs(u.y) < 0.9 ? { x: 0, y: 1, z: 0 } : { x: 1, y: 0, z: 0 };
+    let e1 = {
+      x: u.y * a.z - u.z * a.y,
+      y: u.z * a.x - u.x * a.z,
+      z: u.x * a.y - u.y * a.x,
+    };
+    const l = Math.hypot(e1.x, e1.y, e1.z);
+    e1 = { x: e1.x / l, y: e1.y / l, z: e1.z / l };
+    const e2 = {
+      x: u.y * e1.z - u.z * e1.y,
+      y: u.z * e1.x - u.x * e1.z,
+      z: u.x * e1.y - u.y * e1.x,
+    };
+    return [e1, e2];
+  }
+
+  /* 围绕方向 u 的球冠上第 j/n 个点（斐波那契螺旋，分布均匀） */
+  function capPoint(u, j, n, capAngle, radius) {
+    const t = (j + 0.5) / n;
+    const g = capAngle * Math.sqrt(t);
+    const b = j * GOLD;
+    const [e1, e2] = basis(u);
+    const sg = Math.sin(g), cg = Math.cos(g);
+    const cb = Math.cos(b), sb = Math.sin(b);
     return {
-      id: 'root', depth: 0, label: cat.name, colorVar: '--mm-c1',
-      children: cat.posts.map((p, i) => {
-        const color = COLORS[i % COLORS.length];
-        const href  = ROOT + 'posts/' + p.s + '.html';
-        return {
-          id: p.s, depth: 1, label: p.t, href: href, post: p.t,
-          colorVar: color,
-          children: (p.h || []).map(h2 => ({
-            id: p.s + '::' + h2.a, depth: 2, label: h2.t,
-            href: href + '#' + h2.a, post: p.t, colorVar: color,
-            children: (h2.c || []).map(h3 => ({
-              id: p.s + '::' + h3.a, depth: 3, label: h3.t,
-              href: href + '#' + h3.a, post: p.t, colorVar: color,
-              children: [],
-            })),
-          })),
-        };
-      }),
+      x: (u.x * cg + (e1.x * cb + e2.x * sb) * sg) * radius,
+      y: (u.y * cg + (e1.y * cb + e2.y * sb) * sg) * radius,
+      z: (u.z * cg + (e1.z * cb + e2.z * sb) * sg) * radius,
     };
   }
 
-  /* ───── 放射状布局 ─────
-     角度按可见叶子数分摊扇区；半径按每环节点数自适应，保证圆周不拥挤。 */
-  function layout(tree) {
+  function rebuild() {
     const set = expandSet();
-    const counts = { 1: 0, 2: 0, 3: 0 };
+    nodes = []; links = []; hazes = [];
 
-    (function prepare(node) {
-      node.text  = fitText(node.label, node.depth);
-      node.open  = set.has(node.id);
-      node.shown = node.open ? node.children : [];
-      node.shown.forEach(c => { c.parent = node; });
-      if (node.depth) counts[node.depth]++;
-      let lv = 0;
-      node.shown.forEach(c => { lv += prepare(c); });
-      node.leaves = node.shown.length ? lv : 1;
-      return node.leaves;
-    })(tree);
+    const root = {
+      id: 'root', depth: 0, label: cat.name, color: CORE,
+      post: '', href: '', kids: cat.posts.length,
+      open: set.has('root'),
+      pos: { x: 0, y: 0, z: 0 }, parent: null,
+    };
+    root.text = fitText(cat.name, 0);
+    nodes.push(root);
+    if (!root.open) { finalize(); return; }
 
-    const R = { 0: 0 };
-    R[1] = Math.max(150, counts[1] * 46 / TAU);
-    R[2] = Math.max(R[1] + 160, counts[2] * 13 / TAU);
-    R[3] = Math.max(R[2] + 130, counts[3] * 12 / TAU);
+    const nP = cat.posts.length;
+    R1 = 250 + nP * 3;
+    R2 = R1 * 1.8;
+    const R3 = R2 * 1.32;
 
-    bounds = { x1: -60, y1: -40, x2: 60, y2: 40 };
+    cat.posts.forEach((p, i) => {
+      // 斐波那契球面：文章均匀铺满整个球
+      const y = nP === 1 ? 0 : 1 - (2 * (i + 0.5)) / nP;
+      const rr = Math.sqrt(Math.max(0, 1 - y * y));
+      const th = i * GOLD;
+      const u = { x: Math.cos(th) * rr, y: y, z: Math.sin(th) * rr };
+      const color = PALETTE[i % PALETTE.length];
+      const href  = ROOT + 'posts/' + p.s + '.html';
+      const h2s   = p.h || [];
 
-    (function assign(node, a0, a1) {
-      node.a = (a0 + a1) / 2;
-      node.r = R[node.depth];
-      node.x = Math.cos(node.a) * node.r;
-      node.y = Math.sin(node.a) * node.r;
-      if (node.depth) { placeLabel(node); grow(node); }
-      let acc = a0;
-      node.shown.forEach(c => {
-        const span = (a1 - a0) * c.leaves / node.leaves;
-        assign(c, acc, acc + span);
-        acc += span;
+      const art = {
+        id: p.s, depth: 1, label: p.t, text: fitText(p.t, 1),
+        color: color, post: p.t, href: href, kids: h2s.length,
+        open: set.has(p.s),
+        pos: { x: u.x * R1, y: u.y * R1, z: u.z * R1 },
+        parent: root,
+      };
+      nodes.push(art);
+      links.push({ a: root, b: art });
+
+      if (!art.open || !h2s.length) return;
+
+      // 文章的知识点星团 + 同色星云雾
+      hazes.push({
+        pos: { x: u.x * R1 * 1.45, y: u.y * R1 * 1.45, z: u.z * R1 * 1.45 },
+        color: color, r: R2 * 0.42,
       });
-    })(tree, -Math.PI / 2, TAU - Math.PI / 2);
+      const cap2 = Math.min(0.6, Math.max(0.18, 0.12 * Math.sqrt(h2s.length)));
+      h2s.forEach((h2, j) => {
+        const n2 = {
+          id: p.s + '::' + h2.a, depth: 2, label: h2.t, text: fitText(h2.t, 2),
+          color: color, post: p.t, href: href + '#' + h2.a,
+          kids: (h2.c || []).length, open: set.has(p.s + '::' + h2.a),
+          pos: capPoint(u, j, h2s.length, cap2, R2),
+          parent: art,
+        };
+        nodes.push(n2);
+        links.push({ a: art, b: n2 });
 
-    return tree;
+        if (!n2.open || !n2.kids) return;
+        const u2 = {
+          x: n2.pos.x / R2, y: n2.pos.y / R2, z: n2.pos.z / R2,
+        };
+        const cap3 = Math.min(0.28, 0.09 * Math.sqrt(n2.kids) + 0.08);
+        h2.c.forEach((h3, m) => {
+          const n3 = {
+            id: p.s + '::' + h3.a, depth: 3, label: h3.t, text: fitText(h3.t, 3),
+            color: color, post: p.t, href: href + '#' + h3.a,
+            kids: 0, open: false,
+            pos: capPoint(u2, m, h2.c.length, cap3, R3),
+            parent: n2,
+          };
+          nodes.push(n3);
+          links.push({ a: n2, b: n3 });
+        });
+      });
+    });
+    finalize();
   }
 
-  function dotR(node) {
-    const base = DOT[node.depth];
-    return node.depth === 1
-      ? base + Math.min(4, node.children.length * 0.3)
-      : base;
-  }
-
-  /* 标签位置：左右半球分别外扩，接近正上/正下时居中放到上/下方 */
-  function placeLabel(node) {
-    const r = dotR(node) + 6;
-    const c = Math.cos(node.a), s = Math.sin(node.a);
-    if (Math.abs(c) >= 0.35) {
-      node.anchor = c > 0 ? 'start' : 'end';
-      node.lx = node.x + (c > 0 ? r : -r);
-      node.ly = node.y + s * 3;
-    } else {
-      node.anchor = 'middle';
-      node.lx = node.x;
-      node.ly = node.y + (s > 0 ? r + 9 : -(r + 5));
+  function finalize() {
+    // 星尘：随分类固定播种
+    const rnd = lcg(hashStr(cat.id));
+    stars = [];
+    const SR = Math.max(900, R2 * 1.7);
+    for (let i = 0; i < 170; i++) {
+      const v = 2 * rnd() - 1, th = rnd() * TAU;
+      const rr = Math.sqrt(1 - v * v), rad = SR * (0.35 + 0.65 * Math.cbrt(rnd()));
+      stars.push({
+        pos: { x: Math.cos(th) * rr * rad, y: v * rad, z: Math.sin(th) * rr * rad },
+        r: 0.5 + rnd() * 1.1, a: 0.1 + rnd() * 0.35,
+        tw: 0.5 + rnd() * 1.6, ph: rnd() * TAU,
+      });
     }
+    hover = null; litSet = null;
   }
 
-  function grow(node) {
-    const w = textWidth(node.text, node.depth);
-    const x1 = node.anchor === 'start' ? node.lx
-             : node.anchor === 'end'   ? node.lx - w
-             : node.lx - w / 2;
-    bounds.x1 = Math.min(bounds.x1, node.x - 12, x1 - 4);
-    bounds.x2 = Math.max(bounds.x2, node.x + 12, x1 + w + 4);
-    bounds.y1 = Math.min(bounds.y1, node.y - 14, node.ly - 12);
-    bounds.y2 = Math.max(bounds.y2, node.y + 14, node.ly + 6);
-  }
-
-  /* ───── SVG 辅助 ───── */
-  function el(name, attrs, parent) {
-    const e = document.createElementNS(NS, name);
-    for (const a in attrs) e.setAttribute(a, attrs[a]);
-    if (parent) parent.appendChild(e);
-    return e;
-  }
-
-  /* 放射连线：沿极坐标过渡的贝塞尔曲线，根出发的是直线光束 */
-  function linkPath(p, c) {
-    if (p.depth === 0) {
-      const r0 = 34;
-      return 'M' + (Math.cos(c.a) * r0) + ' ' + (Math.sin(c.a) * r0) +
-             'L' + c.x + ' ' + c.y;
+  /* ───── 发光贴图缓存 ───── */
+  const glowCache = new Map();
+  function glow(color) {
+    let g = glowCache.get(color);
+    if (!g) {
+      g = document.createElement('canvas');
+      g.width = g.height = 128;
+      const gc = g.getContext('2d');
+      const gr = gc.createRadialGradient(64, 64, 0, 64, 64, 64);
+      gr.addColorStop(0, color);
+      gr.addColorStop(0.25, color + 'aa');
+      gr.addColorStop(1, color + '00');
+      gc.fillStyle = gr;
+      gc.fillRect(0, 0, 128, 128);
+      glowCache.set(color, g);
     }
-    const rm = (p.r + c.r) / 2;
-    const c1x = Math.cos(p.a) * rm, c1y = Math.sin(p.a) * rm;
-    const c2x = Math.cos(c.a) * rm, c2y = Math.sin(c.a) * rm;
-    return 'M' + p.x + ' ' + p.y +
-           'C' + c1x + ' ' + c1y + ',' + c2x + ' ' + c2y +
-           ',' + c.x + ' ' + c.y;
+    return g;
   }
 
-  /* ───── 悬停提示 ───── */
+  /* ───── 投影与渲染 ───── */
+  function resize() {
+    dpr = window.devicePixelRatio || 1;
+    const w = viewport.clientWidth, h = viewport.clientHeight;
+    if (w === W && h === H && canvas.width === Math.round(w * dpr)) return;
+    W = w; H = h;
+    canvas.width  = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+  }
+
+  function project(p, cyw, syw, cpt, spt) {
+    const x1 = p.x * cyw + p.z * syw;
+    const z1 = -p.x * syw + p.z * cyw;
+    const y1 = p.y * cpt - z1 * spt;
+    const z2 = p.y * spt + z1 * cpt;
+    const depth = z2 + dist;
+    if (depth < 60) return null;
+    const s = F / depth;
+    return { x: W / 2 + x1 * s, y: H / 2 + y1 * s, s: s, d: depth };
+  }
+
+  function fog(s) {
+    const rel = s / (F / dist);
+    return Math.max(0.18, Math.min(1, 0.25 + (rel - 0.72) * 1.6));
+  }
+
+  function renderFrame(t) {
+    resize();
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    /* 深空背景 */
+    const bg = ctx.createRadialGradient(
+      W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H) * 0.75);
+    bg.addColorStop(0, BG0);
+    bg.addColorStop(1, BG1);
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    const cyw = Math.cos(yaw), syw = Math.sin(yaw);
+    const cpt = Math.cos(pitch), spt = Math.sin(pitch);
+    const P = p => project(p, cyw, syw, cpt, spt);
+
+    /* 星云雾 + 星尘（叠加发光） */
+    ctx.globalCompositeOperation = 'lighter';
+    hazes.forEach(hz => {
+      const q = P(hz.pos);
+      if (!q) return;
+      const r = hz.r * q.s;
+      ctx.globalAlpha = 0.075 * fog(q.s) * (litSet ? 0.4 : 1);
+      ctx.drawImage(glow(hz.color), q.x - r, q.y - r, r * 2, r * 2);
+    });
+    stars.forEach(st => {
+      const q = P(st.pos);
+      if (!q) return;
+      const twk = REDUCED ? 1 : 0.72 + 0.28 * Math.sin(t * 0.001 * st.tw + st.ph);
+      ctx.globalAlpha = st.a * twk * (litSet ? 0.35 : 1);
+      const r = Math.max(0.4, st.r * q.s * 3);
+      ctx.drawImage(glow('#cdd6ee'), q.x - r, q.y - r, r * 2, r * 2);
+    });
+    ctx.globalCompositeOperation = 'source-over';
+
+    /* 投影所有节点（供连线 / 命中检测共用） */
+    nodes.forEach(n => { n.pr = P(n.pos); });
+
+    /* 连线 */
+    links.forEach(lk => {
+      const a = lk.a.pr, b = lk.b.pr;
+      if (!a || !b) return;
+      const lit = !litSet || litSet.has(lk.b.id);
+      ctx.globalAlpha = (lk.b.depth === 1 ? 0.22 : 0.3) * fog(b.s) *
+                        (lit ? (litSet ? 2.6 : 1) : 0.12);
+      if (ctx.globalAlpha > 0.85) ctx.globalAlpha = 0.85;
+      ctx.strokeStyle = lk.b.color;
+      ctx.lineWidth = Math.max(0.4, (lk.b.depth === 1 ? 1.2 : 0.9) * b.s);
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+    });
+
+    /* 节点（先远后近） */
+    const order = nodes.filter(n => n.pr)
+                       .sort((a, b) => b.pr.d - a.pr.d);
+    ctx.globalCompositeOperation = 'lighter';
+    order.forEach(n => {
+      const q = n.pr;
+      const lit = !litSet || litSet.has(n.id);
+      const dim = lit ? 1 : 0.18;
+      if (n.depth === 0) {
+        const r = 70 * q.s;
+        ctx.globalAlpha = 0.9 * dim;
+        ctx.drawImage(glow(CORE), q.x - r, q.y - r, r * 2, r * 2);
+        return;
+      }
+      const cr = Math.max(1, CORE_R[n.depth] * q.s * 1.9);
+      const gr = cr * (n.depth === 1 ? 4.2 : 3.4);
+      ctx.globalAlpha = (n.depth === 1 ? 0.5 : 0.34) * fog(q.s) * dim *
+                        (hover === n ? 1.7 : 1);
+      ctx.drawImage(glow(n.color), q.x - gr, q.y - gr, gr * 2, gr * 2);
+      ctx.globalAlpha = Math.min(1, fog(q.s) * (0.9 + (hover === n ? 0.1 : 0)) * dim);
+      ctx.fillStyle = n.color;
+      ctx.beginPath();
+      ctx.arc(q.x, q.y, cr, 0, TAU);
+      ctx.fill();
+      if (n.kids && !n.open) {          // 收起标记：细环
+        ctx.globalAlpha = 0.55 * fog(q.s) * dim;
+        ctx.strokeStyle = n.color;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(q.x, q.y, cr + 3, 0, TAU);
+        ctx.stroke();
+      }
+    });
+    ctx.globalCompositeOperation = 'source-over';
+
+    /* 标签：核心与文章常显；知识点在分支点亮或凑近时浮现 */
+    ctx.textBaseline = 'middle';
+    order.forEach(n => {
+      const q = n.pr;
+      let alpha;
+      const inBranch = litSet && litSet.has(n.id);
+      if (n.depth === 0) {
+        alpha = litSet && !inBranch ? 0.25 : 1;
+      } else if (n.depth === 1) {
+        alpha = litSet ? (inBranch ? 1 : 0.1) : Math.min(1, fog(q.s) * 1.25);
+      } else {
+        const near = Math.max(0, (q.s - (n.depth === 2 ? 0.9 : 1.25)) * 2.2);
+        alpha = inBranch ? 0.95 : (litSet ? 0 : Math.min(0.85, near * fog(q.s)));
+      }
+      if (alpha <= 0.02) return;
+      ctx.globalAlpha = alpha;
+      ctx.font = FONT[n.depth];
+      const fill = n.depth <= 1 ? INK : n.depth === 2 ? INK2 : INK3;
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = HALO;
+      ctx.lineJoin = 'round';
+      let tx, ty;
+      if (n.depth === 0) {
+        ctx.textAlign = 'center';
+        tx = q.x; ty = q.y;
+      } else {
+        ctx.textAlign = q.x < W / 2 ? 'right' : 'left';
+        const off = (CORE_R[n.depth] * q.s * 1.9) + 7;
+        tx = q.x + (q.x < W / 2 ? -off : off);
+        ty = q.y;
+      }
+      ctx.strokeText(n.text, tx, ty);
+      ctx.fillStyle = fill;
+      ctx.fillText(n.text, tx, ty);
+      if (n.kids && !n.open && n.depth > 0) {
+        const w = ctx.measureText(n.text).width;
+        const sx = tx + (ctx.textAlign === 'right' ? -w - 4 : w + 4);
+        ctx.font = '300 9px ' + SANS;
+        ctx.globalAlpha = alpha * 0.8;
+        ctx.strokeText('+' + n.kids, sx, ty);
+        ctx.fillStyle = INK3;
+        ctx.fillText('+' + n.kids, sx, ty);
+      }
+    });
+    ctx.globalAlpha = 1;
+  }
+
+  /* ───── 主循环：闲时缓慢自转 ───── */
+  function loop(t) {
+    const dt = Math.min(50, t - lastT || 16);
+    lastT = t;
+    if (!REDUCED && !dragging && !hover) yaw += dt * 0.00006;
+    renderFrame(t);
+    requestAnimationFrame(loop);
+  }
+
+  /* ───── 命中检测与交互 ───── */
+  function pick(mx, my) {
+    let best = null, bestD = 1e9;
+    nodes.forEach(n => {
+      const q = n.pr;
+      if (!q) return;
+      const rr = n.depth === 0 ? 40 * q.s
+               : Math.max(9, CORE_R[n.depth] * q.s * 1.9 + 6);
+      const dx = mx - q.x, dy = my - q.y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < rr * rr && q.d < bestD) { bestD = q.d; best = n; }
+    });
+    return best;
+  }
+
+  function litFor(node) {
+    const set = new Set();
+    for (let n = node; n; n = n.parent) set.add(n.id);
+    (function down(n) {
+      nodes.forEach(c => {
+        if (c.parent === n) { set.add(c.id); down(c); }
+      });
+    })(node);
+    return set;
+  }
+
+  /* 悬停提示 */
   const tip = document.createElement('div');
   tip.className = 'mm-tip';
   viewport.appendChild(tip);
-
   function escapeHtml(s) {
     return s.replace(/[&<>"']/g, c => (
       { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
   function showTip(node, clientX, clientY) {
-    if (panning || node.depth === 0) return;
     let html = '';
     if (node.depth > 1 || node.text !== node.label) {
       html += '<div class="mm-tip-name">' + escapeHtml(node.label) + '</div>';
@@ -205,7 +449,7 @@
             escapeHtml(node.post) + '</div>';
     html += '<div class="mm-tip-hint">双击跳转' +
             (node.depth > 1 ? '到对应章节' : '到文章') +
-            (node.children.length ? ' · 单击' + (node.open ? '收起' : '展开') : '') +
+            (node.kids ? ' · 单击' + (node.open ? '收起' : '展开') : '') +
             '</div>';
     tip.innerHTML = html;
     tip.classList.add('show');
@@ -222,183 +466,112 @@
   }
   function hideTip() { tip.classList.remove('show'); }
 
-  /* ───── 悬停高亮：点亮根→节点路径与其子树，其余淡出 ───── */
-  function markLit(n) {
-    if (n.el)     { n.el.classList.add('lit');     focusEls.push(n.el); }
-    if (n.linkEl) { n.linkEl.classList.add('lit'); focusEls.push(n.linkEl); }
-  }
-  function setFocus(node) {
-    clearFocus();
-    svg.classList.add('mm-focus');
-    for (let n = node; n; n = n.parent) markLit(n);
-    (function down(n) {
-      n.shown.forEach(c => { markLit(c); down(c); });
-    })(node);
-  }
-  function clearFocus() {
-    svg.classList.remove('mm-focus');
-    focusEls.forEach(e => e.classList.remove('lit'));
-    focusEls = [];
-  }
+  /* 指针：拖拽旋转 / 双指缩放 / 悬停 / 单击展开 / 双击跳转 */
+  const pointers = new Map();
+  let px0 = 0, py0 = 0, yaw0 = 0, pitch0 = 0, pinch0 = 0, dist0 = 0;
 
-  /* ───── 渲染 ───── */
-  function render() {
-    hideTip();
-    clearFocus();
-    const tree = layout(buildTree());
-
-    svg.innerHTML = '';
-    world = el('g', {}, svg);
-    applyTransform();
-
-    drawLinks(tree);
-    drawNode(tree);
-    return tree;
-  }
-
-  function drawLinks(node) {
-    node.shown.forEach(c => {
-      const path = el('path', { d: linkPath(node, c), class: 'mm-link' }, world);
-      path.style.stroke = 'var(' + c.colorVar + ')';
-      c.linkEl = path;
-      drawLinks(c);
-    });
-  }
-
-  function drawNode(node) {
-    const g = el('g', { class: 'mm-node mm-d' + node.depth }, world);
-    g.style.setProperty('--c', 'var(' + node.colorVar + ')');
-    node.el = g;
-    const hasKids = node.children.length > 0;
-    if (hasKids) g.classList.add('mm-toggleable');
-
-    if (node.depth === 0) {
-      /* 根：居中胶囊 */
-      const w = Math.ceil(textWidth(node.text, 0)) + 52, h = 46;
-      el('rect', {
-        x: -w / 2, y: -h / 2, width: w, height: h, rx: h / 2,
-        class: 'mm-root-pill',
-      }, g);
-      const t = el('text', {
-        x: 0, y: 0, 'text-anchor': 'middle', 'dominant-baseline': 'central',
-        class: 'mm-root-label',
-      }, g);
-      t.style.font = FONT[0];
-      t.textContent = node.text;
-    } else {
-      const r = dotR(node);
-      /* 命中区（比圆点大一圈，方便悬停小点） */
-      el('circle', { cx: node.x, cy: node.y, r: r + 8, class: 'mm-hitc' }, g);
-      el('circle', { cx: node.x, cy: node.y, r: r, class: 'mm-dot' }, g);
-      if (hasKids && !node.open) {
-        el('circle', { cx: node.x, cy: node.y, r: r + 3.5, class: 'mm-ring' }, g);
-      }
-      const t = el('text', {
-        x: node.lx, y: node.ly,
-        'text-anchor': node.anchor, 'dominant-baseline': 'central',
-        class: 'mm-label mm-label-d' + node.depth,
-      }, g);
-      t.style.font = FONT[node.depth];
-      t.textContent = node.text;
-      if (hasKids && !node.open) {
-        const ts = el('tspan', { class: 'mm-count' }, t);
-        ts.textContent = ' +' + node.children.length;
-      }
+  canvas.addEventListener('pointerdown', e => {
+    canvas.setPointerCapture(e.pointerId);
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size === 1) {
+      px0 = e.clientX; py0 = e.clientY;
+      yaw0 = yaw; pitch0 = pitch;
+      moved = false;
+      dragging = true;
+    } else if (pointers.size === 2) {
+      const pts = [...pointers.values()];
+      pinch0 = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      dist0 = dist;
     }
+    viewport.classList.add('mm-panning');
+  });
 
-    /* 单击展开/收起（延迟执行，给双击让路）；双击跳转文章对应位置 */
-    let clickTimer = 0;
-    g.addEventListener('click', () => {
-      clearTimeout(clickTimer);
-      if (!hasKids) return;
-      clickTimer = setTimeout(() => {
-        const set = expandSet();
-        if (set.has(node.id)) set.delete(node.id);
-        else set.add(node.id);
-        render();
-      }, 230);
-    });
-    g.addEventListener('dblclick', (e) => {
-      clearTimeout(clickTimer);
-      e.preventDefault();
-      if (node.href) location.href = node.href;
-    });
-
-    /* 悬停：提示所属文章 + 点亮分支 */
-    if (node.depth > 0) {
-      g.addEventListener('pointerenter', e => {
-        if (panning) return;
-        setFocus(node);
-        showTip(node, e.clientX, e.clientY);
-      });
-      g.addEventListener('pointermove',  e => moveTip(e.clientX, e.clientY));
-      g.addEventListener('pointerleave', () => { clearFocus(); hideTip(); });
+  canvas.addEventListener('pointermove', e => {
+    const rect = viewport.getBoundingClientRect();
+    if (pointers.has(e.pointerId)) {
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     }
+    if (pointers.size === 2) {          // 双指缩放
+      const pts = [...pointers.values()];
+      const d = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      if (pinch0 > 0) dist = clampDist(dist0 * pinch0 / d);
+      moved = true;
+      return;
+    }
+    if (dragging && pointers.size === 1) {
+      const dx = e.clientX - px0, dy = e.clientY - py0;
+      if (Math.hypot(dx, dy) > 4) moved = true;
+      if (moved) {
+        hideTip(); hover = null; litSet = null;
+        yaw   = yaw0 + dx * 0.005;
+        pitch = Math.max(-1.25, Math.min(1.25, pitch0 + dy * 0.005));
+      }
+      return;
+    }
+    /* 悬停 */
+    const n = pick(e.clientX - rect.left, e.clientY - rect.top);
+    if (n !== hover) {
+      hover = n;
+      litSet = n && n.depth > 0 ? litFor(n) : null;
+      canvas.style.cursor = n ? 'pointer' : 'grab';
+      if (n && n.depth > 0) showTip(n, e.clientX, e.clientY);
+      else hideTip();
+    } else if (n) {
+      moveTip(e.clientX, e.clientY);
+    }
+  });
 
-    node.shown.forEach(drawNode);
+  function endPointer(e) {
+    pointers.delete(e.pointerId);
+    if (!pointers.size) {
+      dragging = false;
+      viewport.classList.remove('mm-panning');
+    }
   }
+  canvas.addEventListener('pointerup', endPointer);
+  canvas.addEventListener('pointercancel', endPointer);
+  canvas.addEventListener('pointerleave', () => {
+    if (!dragging) { hover = null; litSet = null; hideTip(); }
+  });
 
-  /* ───── 平移 / 缩放 ───── */
-  function applyTransform() {
-    if (world) world.setAttribute(
-      'transform', 'translate(' + tx + ' ' + ty + ') scale(' + k + ')');
-    // 缩放层级：放大逐级显示二/三级标签（星图看形，放大看字）
-    const z = k > 1.5 ? '3' : k > 0.75 ? '2' : '1';
-    if (svg.getAttribute('data-z') !== z) svg.setAttribute('data-z', z);
+  canvas.addEventListener('click', () => {
+    if (moved || !hover || !hover.kids) return;
+    const node = hover;
+    clearTimeout(clickTimer);
+    clickTimer = setTimeout(() => {
+      const set = expandSet();
+      if (set.has(node.id)) set.delete(node.id);
+      else set.add(node.id);
+      rebuild();
+      renderFrame(performance.now());   // 立即重算投影，不等下一帧
+    }, 230);
+  });
+  canvas.addEventListener('dblclick', e => {
+    clearTimeout(clickTimer);
+    e.preventDefault();
+    if (!moved && hover && hover.href) location.href = hover.href;
+  });
+
+  function clampDist(v) {
+    return Math.max(F * 0.35, Math.min(5200, v));
   }
-  function clampK(v) { return Math.max(0.08, Math.min(3, v)); }
-
-  function zoomAt(px, py, factor) {
-    const nk = clampK(k * factor);
-    factor = nk / k;
-    tx = px - (px - tx) * factor;
-    ty = py - (py - ty) * factor;
-    k = nk;
-    applyTransform();
-  }
-
   viewport.addEventListener('wheel', e => {
     e.preventDefault();
-    const r = viewport.getBoundingClientRect();
-    zoomAt(e.clientX - r.left, e.clientY - r.top, e.deltaY < 0 ? 1.12 : 1 / 1.12);
+    dist = clampDist(dist * (e.deltaY < 0 ? 1 / 1.1 : 1.1));
   }, { passive: false });
 
-  let px0 = 0, py0 = 0, tx0 = 0, ty0 = 0;
-  svg.addEventListener('pointerdown', e => {
-    if (e.button !== 0) return;
-    if (e.target.closest('.mm-node')) return;   // 节点点击不平移
-    panning = true;
-    hideTip();
-    px0 = e.clientX; py0 = e.clientY; tx0 = tx; ty0 = ty;
-    viewport.classList.add('mm-panning');
-    try { svg.setPointerCapture(e.pointerId); } catch (_) {}
-  });
-  svg.addEventListener('pointermove', e => {
-    if (!panning) return;
-    tx = tx0 + e.clientX - px0;
-    ty = ty0 + e.clientY - py0;
-    applyTransform();
-  });
-  function endPan() { panning = false; viewport.classList.remove('mm-panning'); }
-  svg.addEventListener('pointerup', endPan);
-  svg.addEventListener('pointercancel', endPan);
-
-  function fit() {
-    const vw = viewport.clientWidth, vh = viewport.clientHeight;
-    const w = bounds.x2 - bounds.x1, h = bounds.y2 - bounds.y1, m = 40;
-    k = clampK(Math.min((vw - m * 2) / w, (vh - m * 2) / h, 1.2));
-    tx = (vw - w * k) / 2 - bounds.x1 * k;
-    ty = (vh - h * k) / 2 - bounds.y1 * k;
-    applyTransform();
+  function fitCamera() {
+    yaw = -0.5; pitch = 0.26;
+    const target = Math.max(80, Math.min(W, H) * 0.44);
+    dist = clampDist(R2 * 1.12 * F / target);
   }
 
   viewport.querySelectorAll('.mm-toolbar button').forEach(btn => {
     btn.addEventListener('click', () => {
       const act = btn.getAttribute('data-act');
-      const vw = viewport.clientWidth / 2, vh = viewport.clientHeight / 2;
-      if (act === 'in')  zoomAt(vw, vh, 1.25);
-      if (act === 'out') zoomAt(vw, vh, 1 / 1.25);
-      if (act === 'fit') { render(); fit(); }
+      if (act === 'in')  dist = clampDist(dist / 1.25);
+      if (act === 'out') dist = clampDist(dist * 1.25);
+      if (act === 'fit') fitCamera();
     });
   });
 
@@ -410,8 +583,10 @@
         b.classList.toggle('active', b.getAttribute('data-id') === cat.id));
     }
     try { history.replaceState(null, '', '#' + cat.id); } catch (_) {}
-    render();
-    fit();
+    rebuild();
+    resize();
+    fitCamera();
+    renderFrame(performance.now());
   }
 
   if (tabsBox) {
@@ -426,4 +601,5 @@
   });
 
   setCategory(decodeURIComponent(location.hash.slice(1)) || data[0].id);
+  requestAnimationFrame(loop);
 })();

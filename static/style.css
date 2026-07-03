@@ -15,10 +15,6 @@ body[data-theme="paper"] {
   --syn-number:#9a6a2f;  --syn-func:#2f5d86;    --syn-type:#7a4f9a;
   --syn-builtin:#2f5d86; --syn-op:#6a6a64;      --syn-punc:#7a7a72;
   --syn-name:#3a3a36;    --syn-attr:#9a6a2f;    --syn-deco:#7a4f9a;
-  /* 思维导图分支配色 */
-  --mm-root:#1a1a1a;
-  --mm-c1:#c0392b; --mm-c2:#2f5d86; --mm-c3:#5a7d4f; --mm-c4:#9a6a2f;
-  --mm-c5:#7a4f9a; --mm-c6:#2a7f7f; --mm-c7:#b0567a; --mm-c8:#6a6a64;
 }
 body[data-theme="ink"] {
   --ink:#e8e6e0; --ink-2:#a0a09a; --ink-3:#66665e;
@@ -33,10 +29,6 @@ body[data-theme="ink"] {
   --syn-number:#d9a86a;  --syn-func:#8fb8d8;    --syn-type:#c8a6e0;
   --syn-builtin:#8fb8d8; --syn-op:#b0b0a8;      --syn-punc:#9a9a92;
   --syn-name:#d8d6d0;    --syn-attr:#d9a86a;    --syn-deco:#c8a6e0;
-  /* 思维导图分支配色（暗色下提亮） */
-  --mm-root:#e8e6e0;
-  --mm-c1:#e8b87a; --mm-c2:#8fb8d8; --mm-c3:#9fc08a; --mm-c4:#d9a86a;
-  --mm-c5:#c8a6e0; --mm-c6:#7fc8c0; --mm-c7:#d88fa8; --mm-c8:#a0a09a;
 }
 :root {
   --serif:'Noto Serif SC','Source Han Serif SC',serif;
@@ -763,14 +755,12 @@ main { animation:fade-up 0.4s ease both; }
   min-height:420px;
   border:1px solid var(--rule);
   border-radius:var(--radius);
-  background:var(--paper-2);
-  background-image:radial-gradient(var(--rule) 1px, transparent 1px);
-  background-size:24px 24px;
+  background:#0b0c12;          /* 深空：星云需要夜空，不随主题切换 */
   overflow:hidden;
 }
 .mm-viewport.mm-panning { cursor:grabbing; }
-#mm-svg { width:100%; height:100%; display:block; cursor:grab; touch-action:none; }
-.mm-viewport.mm-panning #mm-svg { cursor:grabbing; }
+#mm-canvas { width:100%; height:100%; display:block; cursor:grab; touch-action:none; }
+.mm-viewport.mm-panning #mm-canvas { cursor:grabbing !important; }
 
 .mm-toolbar {
   position:absolute; right:0.9rem; bottom:0.9rem;
@@ -779,59 +769,21 @@ main { animation:fade-up 0.4s ease both; }
 .mm-toolbar button {
   width:34px; height:34px;
   border-radius:var(--radius-sm);
-  border:1px solid var(--rule-2);
-  background:var(--paper);
-  color:var(--ink-2);
+  border:1px solid rgba(255,255,255,0.14);
+  background:rgba(23,26,38,0.72);
+  color:#b8bdcc;
   font-size:0.95rem; line-height:1;
   cursor:pointer;
-  box-shadow:0 2px 8px rgba(0,0,0,0.06);
+  backdrop-filter:blur(4px);
   transition:color 0.15s, border-color 0.15s;
 }
-.mm-toolbar button:hover { color:var(--accent); border-color:var(--accent); }
+.mm-toolbar button:hover { color:#ffe9c4; border-color:rgba(255,233,196,0.5); }
 .mm-hint {
   position:absolute; left:1rem; bottom:0.9rem;
   font-family:var(--sans); font-size:0.72rem; font-weight:300;
-  color:var(--ink-3); letter-spacing:0.03em;
+  color:rgba(202,208,226,0.42); letter-spacing:0.03em;
   pointer-events:none; user-select:none;
 }
-
-/* 导图节点（SVG）：放射状星图 */
-.mm-link {
-  fill:none; stroke-width:1.4; opacity:0.4;
-  transition:opacity 0.15s, stroke-width 0.15s;
-}
-.mm-node { user-select:none; transition:opacity 0.15s; }
-.mm-node.mm-toggleable { cursor:pointer; }
-.mm-hitc { fill:transparent; }
-.mm-dot { fill:var(--c); transition:filter 0.15s; }
-.mm-d2 .mm-dot { opacity:0.85; }
-.mm-d3 .mm-dot { opacity:0.7; }
-.mm-ring { fill:none; stroke:var(--c); stroke-width:1; opacity:0.5; }
-.mm-root-pill { fill:var(--mm-root); }
-.mm-root-label { fill:var(--paper); }
-/* 标签描一圈画布底色，压在连线/圆点上也可读 */
-.mm-label {
-  fill:var(--ink);
-  paint-order:stroke; stroke:var(--paper-2);
-  stroke-width:3px; stroke-linejoin:round;
-}
-.mm-label-d2 { fill:var(--ink-2); }
-.mm-label-d3 { fill:var(--ink-3); }
-.mm-count { fill:var(--ink-3); font-size:9px; }
-
-/* 缩放层级：看形不看字，放大逐级显示二/三级标签 */
-.mm-label-d2, .mm-label-d3 { opacity:0; transition:opacity 0.25s; }
-#mm-svg[data-z="2"] .mm-label-d2 { opacity:1; }
-#mm-svg[data-z="3"] .mm-label-d2,
-#mm-svg[data-z="3"] .mm-label-d3 { opacity:1; }
-
-/* 悬停高亮：点亮根→节点路径与其子树，其余淡出 */
-#mm-svg.mm-focus .mm-link { opacity:0.07; }
-#mm-svg.mm-focus .mm-node { opacity:0.18; }
-#mm-svg.mm-focus .mm-link.lit { opacity:0.95; stroke-width:1.8; }
-#mm-svg.mm-focus .mm-node.lit { opacity:1; }
-#mm-svg.mm-focus .mm-node.lit .mm-label { opacity:1; }  /* 高亮分支的标签强制可见 */
-.mm-node.lit .mm-dot { filter:drop-shadow(0 0 5px var(--c)); }
 
 /* 悬停提示：所属文章 + 双击跳转 */
 .mm-tip {
