@@ -129,6 +129,90 @@
     guardPetSwitching();
     initDivider();
     initSearch();
+    initCodeCopy();
+    initReadProgress();
+    initBackTop();
+  }
+
+  /* ───── 代码块一键复制 ───── */
+  function initCodeCopy() {
+    document.querySelectorAll('.post-body pre').forEach((pre) => {
+      // codehilite 已有外层 div，裸 pre 则补一个包装层做按钮定位
+      let host = pre.parentElement;
+      if (!host.classList.contains('codehilite')) {
+        host = document.createElement('div');
+        host.className = 'code-wrap';
+        pre.parentNode.insertBefore(host, pre);
+        host.appendChild(pre);
+      }
+      host.classList.add('code-host');
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'code-copy';
+      btn.title = '复制代码';
+      btn.innerHTML =
+        '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+        '<rect x="9" y="9" width="11" height="11" rx="2"></rect>' +
+        '<path d="M5 15V5a2 2 0 0 1 2-2h10"></path></svg>' +
+        '<span>复制</span>';
+
+      btn.addEventListener('click', async () => {
+        const text = pre.innerText.replace(/\n$/, '');
+        let ok = false;
+        try {
+          await navigator.clipboard.writeText(text);
+          ok = true;
+        } catch (_) {
+          // http / 旧浏览器降级
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.cssText = 'position:fixed;opacity:0';
+          document.body.appendChild(ta);
+          ta.select();
+          try { ok = document.execCommand('copy'); } catch (_) {}
+          ta.remove();
+        }
+        btn.classList.add(ok ? 'copied' : 'failed');
+        btn.querySelector('span').textContent = ok ? '已复制' : '失败';
+        clearTimeout(btn._t);
+        btn._t = setTimeout(() => {
+          btn.classList.remove('copied', 'failed');
+          btn.querySelector('span').textContent = '复制';
+        }, 1600);
+      });
+      host.appendChild(btn);
+    });
+  }
+
+  /* ───── 文章页顶部阅读进度条 ───── */
+  function initReadProgress() {
+    if (!document.querySelector('.post-full')) return;
+    const bar = document.createElement('div');
+    bar.className = 'read-progress';
+    document.body.appendChild(bar);
+    function update() {
+      const doc = document.documentElement;
+      const max = doc.scrollHeight - window.innerHeight;
+      bar.style.transform = 'scaleX(' + (max > 0 ? doc.scrollTop / max : 0) + ')';
+    }
+    window.addEventListener('scroll', update, { passive: true });
+    update();
+  }
+
+  /* ───── 返回顶部 ───── */
+  function initBackTop() {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.id = 'back-top';
+    btn.title = '返回顶部';
+    btn.textContent = '↑';
+    document.body.appendChild(btn);
+    btn.addEventListener('click', () =>
+      window.scrollTo({ top: 0, behavior: 'smooth' }));
+    window.addEventListener('scroll', () => {
+      btn.classList.toggle('show', window.scrollY > 400);
+    }, { passive: true });
   }
 
   /* ───── 分隔条：装饰光晕（随鼠标/主题）+ 拖拽改变目录宽度 ───── */

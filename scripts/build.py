@@ -119,6 +119,7 @@ def head(title, root=""):
         '  <nav class="header-nav">\n'
         f'    <a href="{root}index.html">文章</a>\n'
         f'    <a href="{root}tags.html">目录</a>\n'
+        f'    <a href="{root}mindmap.html">导图</a>\n'
         '  </nav>\n'
         '  <div class="search" id="search">\n'
         '    <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">'
@@ -192,6 +193,27 @@ def render_md(content):
         },
     )
     return md.convert(content)
+
+
+def extract_headings(content):
+    """提取正文里的二级标题（跳过代码块），作为思维导图的知识点节点。"""
+    heads = []
+    in_code = False
+    for line in content.split("\n"):
+        s = line.strip()
+        if s.startswith("```"):
+            in_code = not in_code
+            continue
+        if in_code:
+            continue
+        m = re.match(r"^##\s+(.+)$", s)
+        if m:
+            t = m.group(1).strip()
+            t = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", t)   # 链接 → 文本
+            t = re.sub(r"[*_`]", "", t)                       # 去掉强调/行内代码标记
+            t = re.sub(r"\\(.)", r"\1", t)                    # 还原 \< \> 等转义
+            heads.append(t)
+    return heads
 
 
 def strip_leading_h1(content):
@@ -322,7 +344,8 @@ def build_tags(posts, groups):
         )
         sections.append(
             f'<section class="tag-section" id="{sid}">'
-            f'<h2 class="tag-heading">{cat_name}</h2>'
+            f'<h2 class="tag-heading">{cat_name}'
+            f'<a class="tag-mm-link" href="mindmap.html#{sid}">导图 →</a></h2>'
             f'<ul class="tag-post-list">{items}</ul>'
             f'</section>'
         )
@@ -331,6 +354,56 @@ def build_tags(posts, groups):
         head("目录", root="")
         + render_sidebar(groups, root="", current_slug=None)
         + f'<main><div class="tags-page"><h1 class="page-title">目录</h1>{body}</div></main>'
+        + foot(root="")
+    )
+
+
+def build_mindmap_data(groups):
+    """每个分类一棵树：分类 → 文章 → 二级标题（知识点）。"""
+    data = []
+    for cat_name, cat_posts in groups:
+        data.append({
+            "name": cat_name,
+            "id":   slugify(cat_name),
+            "posts": [
+                {"t": p["title"], "s": p["slug"], "h": extract_headings(p["content"])}
+                for p in cat_posts
+            ],
+        })
+    return "window.MINDMAP_DATA=" + json.dumps(data, ensure_ascii=False) + ";"
+
+
+def build_mindmap(groups):
+    tabs = "".join(
+        f'<button class="mm-tab" type="button" data-id="{slugify(name)}">'
+        f'{name}<span class="mm-tab-n">{len(cat_posts)}</span></button>'
+        for name, cat_posts in groups
+    )
+    page = (
+        '<main class="mindmap-main">\n'
+        '<div class="mindmap-page">\n'
+        '  <div class="mm-topbar">\n'
+        '    <h1 class="mm-title">思维导图</h1>\n'
+        f'    <div class="mm-tabs" id="mm-tabs">{tabs}</div>\n'
+        '  </div>\n'
+        '  <div class="mm-viewport" id="mm-viewport">\n'
+        '    <svg id="mm-svg" xmlns="http://www.w3.org/2000/svg"></svg>\n'
+        '    <div class="mm-toolbar">\n'
+        '      <button type="button" data-act="in" title="放大">＋</button>\n'
+        '      <button type="button" data-act="out" title="缩小">－</button>\n'
+        '      <button type="button" data-act="fit" title="适应画布">⤢</button>\n'
+        '    </div>\n'
+        '    <div class="mm-hint">拖拽平移 · 滚轮缩放 · 点击节点展开/收起 · ↗ 打开文章</div>\n'
+        '  </div>\n'
+        '</div>\n'
+        '</main>\n'
+        f'<script defer src="static/mindmap-data.js?v={VERSION}"></script>\n'
+        f'<script defer src="static/mindmap.js?v={VERSION}"></script>\n'
+    )
+    return (
+        head("思维导图", root="")
+        + render_sidebar(groups, root="", current_slug=None)
+        + page
         + foot(root="")
     )
 
@@ -389,6 +462,13 @@ def main():
 
     (DIST / "tags.html").write_text(build_tags(posts, groups), encoding="utf-8")
     print("✓ tags.html")
+
+    (DIST / "static" / "mindmap-data.js").write_text(
+        build_mindmap_data(groups), encoding="utf-8")
+    print("✓ static/mindmap-data.js")
+
+    (DIST / "mindmap.html").write_text(build_mindmap(groups), encoding="utf-8")
+    print("✓ mindmap.html")
 
     (DIST / "rss.xml").write_text(build_rss(posts), encoding="utf-8")
     print("✓ rss.xml")
