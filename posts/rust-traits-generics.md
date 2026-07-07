@@ -202,3 +202,78 @@ trait Named: std::fmt::Display {
 ```
 
 选型：能用泛型（静态分发）就用泛型，性能最好；需要异构集合 / 运行时多态再用 `dyn`。
+
+## 十一、trait 与生命周期
+
+```rust
+// trait 对象默认带 'static 约束：Box<dyn Trait> ≡ Box<dyn Trait + 'static>
+fn spawn_job(job: Box<dyn Fn() + Send + 'static>) { /* ... */ }
+
+// 借用数据的 trait 对象要显式标注生命周期
+struct Parser<'a> {
+    on_token: Box<dyn Fn(&str) + 'a>,     // 允许闭包借用外部数据
+}
+
+// 泛型 + 引用参数：约束"引用活得够久"
+fn largest<'a, T: PartialOrd>(items: &'a [T]) -> &'a T {
+    let mut max = &items[0];
+    for it in items { if it > max { max = it; } }
+    max
+}
+```
+
+遇到 `may not live long enough` 时先问：这个 trait 对象/闭包是否真的要 `'static`（比如跨线程），不需要就放宽为 `+ 'a`。
+
+## 十二、PhantomData 与类型状态
+
+零大小的"幽灵字段"，让类型系统替你记状态——非法操作直接编译不过：
+
+```rust
+use std::marker::PhantomData;
+
+struct Open;
+struct Closed;
+
+struct Conn<State> {
+    addr: String,
+    _st: PhantomData<State>,
+}
+
+impl Conn<Closed> {
+    fn connect(addr: &str) -> Conn<Open> {
+        Conn { addr: addr.into(), _st: PhantomData }
+    }
+}
+impl Conn<Open> {
+    fn send(&self, _data: &[u8]) { /* 只有 Open 才有 send */ }
+    fn close(self) -> Conn<Closed> {
+        Conn { addr: self.addr, _st: PhantomData }
+    }
+}
+
+// Conn::<Closed>::send(...)  ← 编译错误：未连接就发送
+```
+
+`PhantomData<T>` 不占内存，只参与类型检查与 drop 检查，FFI 封装、单位类型（米/秒）、builder 状态机都靠它。
+
+## 十三、孤儿规则与 newtype
+
+孤儿规则：**trait 或类型至少有一个在本 crate**，才能写 `impl`——不能给 `Vec<i32>` 实现 `Display`。绕法是 newtype 包一层：
+
+```rust
+struct Wrapper(Vec<String>);
+
+impl std::fmt::Display for Wrapper {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "[{}]", self.0.join(", "))
+    }
+}
+
+// 想让 Wrapper 直接当 Vec 用：实现 Deref（慎用，仅限"就是它的别名"语义）
+impl std::ops::Deref for Wrapper {
+    type Target = Vec<String>;
+    fn deref(&self) -> &Self::Target { &self.0 }
+}
+```
+
+newtype 还能提供**语义强类型**：`struct UserId(u64)` 和 `struct OrderId(u64)` 不会传错位置，编译器帮你查——零运行时成本。

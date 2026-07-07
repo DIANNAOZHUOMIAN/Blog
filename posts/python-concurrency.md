@@ -153,7 +153,73 @@ result = np.sqrt(np.arange(10_000_000))
 
 详见《Python 异步编程》。
 
-## 八、常见坑
+## 八、同步原语进阶
+
+```python
+import threading
+
+lock = threading.Lock()          # 互斥锁：with lock: ...
+rlock = threading.RLock()        # 可重入锁：同一线程可多次获取
+sem = threading.Semaphore(3)     # 信号量：最多 3 个线程同时进入
+event = threading.Event()        # 事件：set() 后所有 wait() 放行
+barrier = threading.Barrier(4)   # 栅栏：凑齐 4 个线程一起继续
+```
+
+### Condition：等待某个条件成立
+
+```python
+cond = threading.Condition()
+queue_data = []
+
+def consumer():
+    with cond:
+        while not queue_data:          # 用 while 防虚假唤醒
+            cond.wait()
+        item = queue_data.pop(0)
+
+def producer(item):
+    with cond:
+        queue_data.append(item)
+        cond.notify()                  # 唤醒一个等待者
+```
+
+### 死锁的两条纪律
+
+- 多把锁永远按**同一顺序**获取；
+- 拿着锁不要调用外部回调 / IO——把临界区压到最小。
+
+## 九、进程间通信与共享内存
+
+```python
+from multiprocessing import Pipe, Manager, shared_memory
+import numpy as np
+
+# Pipe：两端双向收发，比 Queue 轻
+parent, child = Pipe()
+parent.send({"cmd": "run"})
+print(child.recv())
+
+# Manager：托管的共享 dict / list（方便但慢，走代理）
+with Manager() as m:
+    d = m.dict()
+    d["count"] = 0
+
+# shared_memory：零拷贝共享大数组（3.8+，适合 NumPy）
+shm = shared_memory.SharedMemory(create=True, size=8 * 1024 * 1024)
+arr = np.ndarray((1024, 1024), dtype=np.float64, buffer=shm.buf)
+# 其他进程用 SharedMemory(name=shm.name) 附着同一块内存
+shm.close(); shm.unlink()
+```
+
+选择：小消息用 `Queue`/`Pipe`；共享状态少量用 `Manager`；大数组用 `shared_memory`。
+
+## 十、GIL 的现在与未来
+
+- **3.12**：每个子解释器可拥有独立 GIL（PEP 684），`concurrent.interpreters` 生态还在成型；
+- **3.13**：实验性 **free-threading** 构建（PEP 703，`python3.13t`），真正移除 GIL，但单线程略有损耗、三方库需适配；
+- 现阶段生产建议不变：**IO 密集用线程/协程，CPU 密集用多进程或原生扩展**（NumPy、Cython、Rust 扩展在计算时本来就释放 GIL）。
+
+## 十一、常见坑
 
 1. **用多线程跑 CPU 密集**：GIL 下没有加速，要用进程；
 2. **multiprocessing 不放在 `__main__` 下**：Windows 会无限递归创建进程；

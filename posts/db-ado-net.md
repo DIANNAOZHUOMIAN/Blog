@@ -134,6 +134,89 @@ catch
 }
 ```
 
+## 八、连接池
+
+`SqlConnection` 的 `Open/Close` 并不真开真关——ADO.NET 默认按**连接字符串**维护连接池：
+
+```csharp
+// 连接字符串相关参数
+// Pooling=true（默认）；Min Pool Size=0；Max Pool Size=100
+using var conn = new SqlConnection(connStr);
+conn.Open();     // 从池里借
+// ...
+// Dispose/Close = 归还到池，不是断开 TCP
+```
+
+- 所以 `using` 用完即弃是**正确姿势**，不要自己缓存连接对象；
+- 池按连接字符串区分：字符串差一个空格就是两个池；
+- 泄漏症状：`Timeout expired... max pool size was reached` —— 检查漏掉的 `using`；
+- 清池：`SqlConnection.ClearPool(conn)` / `ClearAllPools()`（换密码后有用）。
+
+## 九、异步 ADO.NET
+
+IO 密集的数据库操作应该用异步方法，释放线程池线程：
+
+```csharp
+await using var conn = new SqlConnection(connStr);
+await conn.OpenAsync();
+
+await using var cmd = new SqlCommand(
+    "SELECT Id, Name FROM Users WHERE Age > @age", conn);
+cmd.Parameters.AddWithValue("@age", 18);
+
+await using var reader = await cmd.ExecuteReaderAsync();
+while (await reader.ReadAsync())
+{
+    Console.WriteLine($"{reader.GetInt32(0)} {reader.GetString(1)}");
+}
+
+// 同样有 ExecuteNonQueryAsync / ExecuteScalarAsync
+// 全链路传 CancellationToken：cmd.ExecuteReaderAsync(ct)
+```
+
+WinForms/WPF 里用异步还能顺带避免 UI 卡死；注意别 `.Result`/`.Wait()` 混用造成死锁。
+
+## 十、SqlBulkCopy：批量导入
+
+一条条 INSERT 导入万级数据会很慢，`SqlBulkCopy` 走批量协议，快一到两个数量级：
+
+```csharp
+var table = new DataTable();
+table.Columns.Add("Name", typeof(string));
+table.Columns.Add("Age", typeof(int));
+for (int i = 0; i < 100_000; i++) table.Rows.Add($"u{i}", i % 80);
+
+using var bulk = new SqlBulkCopy(connStr)
+{
+    DestinationTableName = "Users",
+    BatchSize = 5000,
+};
+bulk.ColumnMappings.Add("Name", "Name");
+bulk.ColumnMappings.Add("Age", "Age");
+bulk.WriteToServer(table);       // 也有 WriteToServerAsync
+```
+
+MySQL 对应 `MySqlBulkCopy`（MySqlConnector 包），SQLite 则用"单事务包住多条 INSERT"即可提速百倍。
+
+## 十一、DataAdapter 与断开式更新
+
+`DataAdapter` 把查询结果填进 `DataSet`，离线改完一次性回写：
+
+```csharp
+var adapter = new SqlDataAdapter("SELECT * FROM Users", conn);
+var builder = new SqlCommandBuilder(adapter);   // 自动生成增删改 SQL
+
+var ds = new DataSet();
+adapter.Fill(ds, "Users");
+
+ds.Tables["Users"].Rows[0]["Name"] = "新名字";   // 离线修改
+ds.Tables["Users"].Rows.Add(null, "新增", 20);
+
+adapter.Update(ds, "Users");    // 按 RowState 批量回写
+```
+
+适合表格编辑类 WinForms 场景（配 `DataGridView.DataSource`）；服务端代码更推荐 Dapper/EF Core，不要让 DataSet 到处传。
+
 ## 速记
 
 - 连接串入 `App.config`，用 `ConfigurationManager` 读取。

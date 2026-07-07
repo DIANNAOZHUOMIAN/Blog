@@ -174,7 +174,61 @@ class Conn:
 async with Conn() as c: ...
 ```
 
-## 九、常见坑
+## 九、TaskGroup：结构化并发（3.11+）
+
+比 `gather` 更安全：任何子任务失败，其余自动取消，异常打包成 `ExceptionGroup`。
+
+```python
+async def main():
+    async with asyncio.TaskGroup() as tg:      # 出块前保证全部结束
+        t1 = tg.create_task(fetch("a"))
+        t2 = tg.create_task(fetch("b"))
+    print(t1.result(), t2.result())
+
+try:
+    asyncio.run(main())
+except* ValueError as eg:          # except*：按类型解包 ExceptionGroup
+    for e in eg.exceptions:
+        print("失败:", e)
+```
+
+## 十、异步同步原语
+
+与 threading 同名但**只在事件循环内**生效、无需考虑线程安全开销。
+
+```python
+lock = asyncio.Lock()
+async with lock:                   # 保护共享状态
+    ...
+
+event = asyncio.Event()            # await event.wait() / event.set()
+sem = asyncio.Semaphore(10)        # 限流（见第四节）
+cond = asyncio.Condition()         # 条件变量
+
+# 一次性传值用 Future 更直接
+fut = asyncio.get_running_loop().create_future()
+fut.set_result(42)
+```
+
+## 十一、调试与诊断
+
+```python
+# 开发期打开 debug 模式：报告未 await 的协程、慢回调
+asyncio.run(main(), debug=True)
+
+# 看当前所有任务卡在哪
+for t in asyncio.all_tasks():
+    t.print_stack(limit=3)
+
+# 慢回调阈值（默认 0.1s，超过打警告）
+loop.slow_callback_duration = 0.05
+```
+
+- 事件循环里出现 `Executing <Task ...> took 0.5s` 说明有同步阻塞混进来了；
+- Linux 生产环境可换 **uvloop**：`asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())`，吞吐提升 2-4 倍；
+- 压测协程数量不是越多越好，配合 Semaphore 找到下游能承受的并发度。
+
+## 十二、常见坑
 
 1. **调用协程不 `await`**：协程不执行，且 "coroutine was never awaited" 警告；
 2. **在协程里用 `time.sleep()`**：阻塞整个事件循环，要用 `await asyncio.sleep()`；

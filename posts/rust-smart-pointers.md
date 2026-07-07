@@ -179,7 +179,74 @@ impl Drop for Guard {
 
 `Drop` 用于 RAII（文件、锁、连接的自动释放）；手动提前释放用 `std::mem::drop(x)`，不能直接调 `x.drop()`。
 
-## 九、选型小结
+## 九、Cow\<T\>：写时克隆
+
+`Clone on Write`——读时借用零成本，需要修改才克隆：
+
+```rust
+use std::borrow::Cow;
+
+fn ensure_prefix(s: &str) -> Cow<'_, str> {
+    if s.starts_with("id_") {
+        Cow::Borrowed(s)                    // 已合规：不分配
+    } else {
+        Cow::Owned(format!("id_{s}"))       // 需修正：才分配
+    }
+}
+
+// to_mut()：借用态会先克隆再给可变引用
+let mut c: Cow<str> = Cow::Borrowed("abc");
+c.to_mut().push('!');                       // 此刻才发生克隆
+```
+
+适合"配置默认值 + 偶尔覆盖"、"清洗多数已干净的数据"这类场景。
+
+## 十、自定义智能指针实战
+
+实现 `Deref` + `Drop` 就得到一个"带行为的指针"，这也是 `MutexGuard` 的原理：
+
+```rust
+use std::ops::{Deref, DerefMut};
+
+struct Tracked<T> {
+    value: T,
+    name: &'static str,
+}
+
+impl<T> Deref for Tracked<T> {
+    type Target = T;
+    fn deref(&self) -> &T { &self.value }
+}
+impl<T> DerefMut for Tracked<T> {
+    fn deref_mut(&mut self) -> &mut T { &mut self.value }
+}
+impl<T> Drop for Tracked<T> {
+    fn drop(&mut self) {
+        println!("[{}] 释放", self.name);    // 归还连接、解锁、计时……
+    }
+}
+
+let mut v = Tracked { value: vec![1, 2], name: "buf" };
+v.push(3);                    // Deref 强转：直接用 Vec 的方法
+```
+
+RAII 守卫模式：资源获取放 `new`，清理放 `Drop`，作用域一结束自动归还——数据库连接池、文件锁、性能计时器都是这个套路。
+
+## 十一、内存布局与开销对比
+
+| 指针 | 栈上大小 | 堆上额外开销 | 运行时成本 |
+|---|---|---|---|
+| `Box<T>` | 1 指针 | 无 | 无 |
+| `Rc<T>` | 1 指针 | strong + weak 两个计数 | 克隆/析构改计数（非原子） |
+| `Arc<T>` | 1 指针 | 同上 | 原子操作，跨核有争用成本 |
+| `RefCell<T>` | T + 借用标记 | — | 运行时借用检查 |
+| `Box<dyn Trait>` | 2 指针（胖指针） | vtable 共享 | 虚调用，不可内联 |
+
+- `Rc`/`Arc` 的 `clone()` 只复制指针加计数，O(1)，别怕用；
+- 热路径上 `Arc<Mutex<T>>` 争用明显时，考虑分片锁或消息传递重构；
+- `dyn Trait` 的胖指针 = 数据指针 + vtable 指针，`size_of::<Box<dyn T>>() == 16`（64 位）。
+
+## 十二、选型小结
 
 | 需求 | 用 |
 |---|---|

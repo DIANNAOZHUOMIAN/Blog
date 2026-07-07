@@ -222,7 +222,76 @@ router.register("posts", PostViewSet)
 urlpatterns += router.urls            # 自动生成增删改查接口
 ```
 
-## 十、运行与选型
+## 十、认证与权限
+
+```python
+from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.decorators import login_required, permission_required
+
+def signin(request):
+    user = authenticate(request, username=u, password=p)   # 校验
+    if user:
+        login(request, user)                               # 写 session
+
+@login_required                          # 未登录跳转 settings.LOGIN_URL
+def dashboard(request): ...
+
+@permission_required("app.delete_book")  # 模型级权限
+def remove(request, pk): ...
+```
+
+- 自定义用户模型：项目**第一次迁移前**就设 `AUTH_USER_MODEL = "app.User"`（继承 `AbstractUser`）；
+- 类视图用 `LoginRequiredMixin` / `PermissionRequiredMixin`；
+- 对象级权限（"只能改自己的帖子"）在视图里查 `obj.owner == request.user`，或用 django-guardian。
+
+## 十一、中间件与信号
+
+```python
+# middleware.py：包住每个请求的洋葱模型
+class TimingMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+    def __call__(self, request):
+        t0 = time.perf_counter()
+        response = self.get_response(request)
+        response["X-Elapsed"] = f"{time.perf_counter()-t0:.3f}"
+        return response
+# settings.MIDDLEWARE 里注册，顺序即执行顺序
+
+# signals：模型事件钩子（解耦，但别滥用）
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+
+@receiver(post_save, sender=Order)
+def on_order_saved(sender, instance, created, **kw):
+    if created:
+        notify(instance)
+```
+
+## 十二、缓存与性能
+
+```python
+# settings.py
+CACHES = {"default": {
+    "BACKEND": "django.core.cache.backends.redis.RedisCache",
+    "LOCATION": "redis://127.0.0.1:6379/1",
+}}
+
+from django.core.cache import cache
+cache.set("hot_list", data, 300)
+data = cache.get_or_set("hot_list", compute, 300)
+
+from django.views.decorators.cache import cache_page
+
+@cache_page(60)                       # 整页缓存 60 秒
+def index(request): ...
+```
+
+- ORM 三板斧：`select_related`（外键 JOIN）、`prefetch_related`（多对多）、`only/defer`（裁剪字段）；
+- 开发期装 **django-debug-toolbar** 盯 SQL 数量，N+1 一眼可见；
+- 会话/缓存都指向 Redis 后，多实例部署才无状态。
+
+## 十三、运行与选型
 
 ```bash
 python manage.py runserver           # 开发服务器

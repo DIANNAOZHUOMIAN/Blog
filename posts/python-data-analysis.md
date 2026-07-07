@@ -174,7 +174,61 @@ plt.show()
 
 中文乱码：`plt.rcParams["font.sans-serif"] = ["SimHei"]`、`plt.rcParams["axes.unicode_minus"] = False`。
 
-## 十一、性能提示
+## 十一、透视表与交叉表
+
+```python
+# 透视表：行=地区，列=年份，值=销售额求和
+df.pivot_table(index="region", columns="year",
+               values="sales", aggfunc="sum",
+               fill_value=0, margins=True)   # margins 加总计行/列
+
+# 交叉表：统计两个分类的频次
+pd.crosstab(df["sex"], df["survived"], normalize="index")  # 行内占比
+
+# melt：宽表转长表（透视的逆操作）
+df.melt(id_vars="name", var_name="year", value_name="sales")
+```
+
+## 十二、窗口与滚动计算
+
+```python
+s = df["price"]
+s.rolling(7).mean()              # 7 期滚动均值（前 6 个为 NaN）
+s.rolling(7, min_periods=1).sum()
+s.expanding().max()              # 累计最大
+s.ewm(span=12).mean()            # 指数加权（EMA）
+
+s.shift(1)                       # 整体后移一期（昨日值）
+s.diff()                         # 一阶差分
+s.pct_change()                   # 环比变化率
+
+# 分组内窗口：每支股票各自算均线
+df["ma5"] = df.groupby("code")["price"].transform(
+    lambda x: x.rolling(5).mean())
+```
+
+## 十三、分类类型与内存优化
+
+```python
+df.info(memory_usage="deep")             # 看真实内存
+
+# 低基数字符串列改 category：内存约降一个数量级
+df["city"] = df["city"].astype("category")
+
+# 数值向下转型
+df["cnt"] = pd.to_numeric(df["cnt"], downcast="integer")
+
+# 大文件分块读取
+for chunk in pd.read_csv("big.csv", chunksize=100_000):
+    process(chunk)
+
+# 只读需要的列
+pd.read_csv("big.csv", usecols=["date", "price"])
+```
+
+顺带一提：对超大数据集可试 **Polars**（`pl.read_csv`，Rust 内核、懒执行、多核），API 与 Pandas 相近，常有数倍到数十倍差距。
+
+## 十四、性能提示
 
 1. **避免 `iterrows` 循环**，优先向量化或 `apply`；
 2. 大文件用 `read_csv(..., chunksize=...)` 分块，或换 **Polars**（更快的 DataFrame）；

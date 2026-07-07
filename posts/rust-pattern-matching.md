@@ -154,7 +154,54 @@ match &mut value {
 if let Some(x) = opt { }  // 正确
 ```
 
-## 八、常见用法小结
+## 八、matches! 宏与工具技巧
+
+```rust
+// matches!：模式匹配返回 bool，比 if let 更短
+let ch = 'k';
+matches!(ch, 'a'..='z')                      // true
+matches!(status, Status::Active | Status::Pending)
+
+// 在迭代器里过滤枚举变体
+let active: Vec<_> = users.iter()
+    .filter(|u| matches!(u.role, Role::Admin))
+    .collect();
+
+// Option/Result 上的模式辅助
+opt.is_some_and(|v| v > 3)       // Some 且满足条件
+res.is_ok_and(|v| v > 0)
+```
+
+`assert!(matches!(x, Pattern))` 在测试里断言"形状"而不比较全部字段，很好用。
+
+## 九、模式驱动的状态机
+
+枚举 + match 是 Rust 里写状态机最自然的方式，编译器保证不漏分支：
+
+```rust
+enum State {
+    Idle,
+    Running { progress: u8 },
+    Done(Result<String, String>),
+}
+
+enum Event { Start, Tick(u8), Finish(String), Fail(String) }
+
+fn step(state: State, event: Event) -> State {
+    use {Event::*, State::*};
+    match (state, event) {
+        (Idle, Start)                => Running { progress: 0 },
+        (Running { .. }, Tick(p))    => Running { progress: p },
+        (Running { .. }, Finish(s))  => Done(Ok(s)),
+        (Running { .. }, Fail(e))    => Done(Err(e)),
+        (s, _)                       => s,      // 其余事件忽略
+    }
+}
+```
+
+新增状态或事件时，去掉兜底分支，编译器会把所有需要处理的组合列给你——这是"让非法状态不可表示"的实践。
+
+## 十、常见用法小结
 
 | 场景 | 写法 |
 |---|---|

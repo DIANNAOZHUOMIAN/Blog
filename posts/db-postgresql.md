@@ -331,7 +331,46 @@ pg_basebackup -D /backup -Ft -z -P -X stream
 - 列加密 `pgcrypto`；
 - 审计扩展 `pgaudit`。
 
-## 十七、与其他对比
+## 十七、锁与并发控制（MVCC）
+
+PG 靠 MVCC 读写互不阻塞：写产生新版本行，读按快照取旧版本，**读永远不等写**。
+
+```sql
+-- 显式行锁
+SELECT * FROM jobs WHERE id = 1 FOR UPDATE;          -- 排他
+SELECT * FROM jobs WHERE status = 'new'
+  FOR UPDATE SKIP LOCKED LIMIT 10;                   -- 任务队列神器：跳过已锁行
+SELECT ... FOR UPDATE NOWAIT;                        -- 拿不到锁立即报错
+
+-- 谁在等谁
+SELECT pid, state, wait_event_type, query
+FROM pg_stat_activity WHERE wait_event_type = 'Lock';
+SELECT * FROM pg_locks WHERE NOT granted;
+```
+
+- 隔离级默认 Read Committed；`REPEATABLE READ` 之上冲突会抛 `serialization failure`，应用要重试；
+- **咨询锁**（advisory lock）：`SELECT pg_try_advisory_lock(42)`——拿业务自定义的分布式锁，不锁任何表；
+- DDL 拿的是表级强锁：生产加列用 `ADD COLUMN ... DEFAULT`（11+ 不重写表）、建索引用 `CREATE INDEX CONCURRENTLY`。
+
+## 十八、全文检索
+
+```sql
+-- tsvector + GIN 索引
+ALTER TABLE docs ADD COLUMN tsv tsvector
+  GENERATED ALWAYS AS (to_tsvector('simple', title || ' ' || body)) STORED;
+CREATE INDEX idx_docs_tsv ON docs USING GIN(tsv);
+
+SELECT title, ts_rank(tsv, q) AS rank
+FROM docs, to_tsquery('simple', 'rust & 并发') q
+WHERE tsv @@ q
+ORDER BY rank DESC;
+```
+
+- 中文分词装 **zhparser** / **pg_jieba** 扩展（`simple` 配置只按空格切）；
+- 模糊匹配另一条路：`pg_trgm` 扩展 + GIN，`WHERE name % '苹果'` 或 `ILIKE '%果%'` 也能走索引；
+- 简单站内搜索 PG 全文足够，重排序/高亮需求大再上 Elasticsearch / Meilisearch。
+
+## 十九、与其他对比
 
 | 项 | PostgreSQL | MySQL |
 |---|---|---|
@@ -344,7 +383,7 @@ pg_basebackup -D /backup -Ft -z -P -X stream
 | 默认隔离 | Read Committed | Repeatable Read |
 | 连接成本 | 高（进程） | 低（线程） |
 
-## 十八、检查清单
+## 二十、检查清单
 
 - 用 `timestamptz` / `text` / `jsonb`；
 - 主键 `BIGINT GENERATED ALWAYS AS IDENTITY`；

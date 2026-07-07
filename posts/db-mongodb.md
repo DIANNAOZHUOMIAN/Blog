@@ -364,7 +364,50 @@ s.StartTransaction();
 await s.CommitTransactionAsync();
 ```
 
-## 十五、常见坑
+## 十五、读写关注与一致性
+
+副本集下的一致性由三个旋钮决定：
+
+```javascript
+// writeConcern：写要等几个节点确认
+db.orders.insertOne(doc, { writeConcern: { w: "majority", wtimeout: 5000 } })
+// w:1 只等主（默认，故障切换可能丢最近写入）；w:"majority" 过半确认
+
+// readConcern：读什么级别的数据
+db.orders.find().readConcern("majority")   // 只读已过半提交的（不会回滚）
+// local（默认）| majority | linearizable（最强，仅主节点单文档）
+
+// readPreference：从哪读
+// primary（默认）| primaryPreferred | secondary | nearest
+db.getMongo().setReadPref("secondaryPreferred")   // 读扩展，接受复制延迟
+```
+
+组合建议：金钱相关 `w:"majority"` + `readConcern:"majority"`；日志类 `w:1` 换吞吐；从库读必须容忍秒级旧数据。
+
+## 十六、GridFS：大文件存储
+
+BSON 文档上限 16MB，更大的文件用 GridFS 自动分块（默认 255KB）：
+
+```csharp
+var bucket = new GridFSBucket(db, new GridFSBucketOptions {
+    BucketName = "videos", ChunkSizeBytes = 1024 * 1024,
+});
+
+// 上传 / 下载
+var id = await bucket.UploadFromStreamAsync("demo.mp4", fileStream);
+await bucket.DownloadToStreamAsync(id, outStream);
+
+// 按名字找 + 删除
+var info = await (await bucket.FindAsync(
+    Builders<GridFSFileInfo>.Filter.Eq(f => f.Filename, "demo.mp4")))
+    .FirstOrDefaultAsync();
+await bucket.DeleteAsync(info.Id);
+```
+
+- 存的是 `fs.files`（元数据）+ `fs.chunks`（分块）两个集合，可以正常复制/分片；
+- 频繁整读整写的大文件，对象存储（S3/MinIO）+ 库里存 URL 通常是更好的架构；GridFS 胜在事务性与部署简单。
+
+## 十七、常见坑
 
 - 副本集才有事务；
 - 索引大小要看内存能否装下（影响性能）；
@@ -375,7 +418,7 @@ await s.CommitTransactionAsync();
 - 时间统一 UTC，BSON 不带时区；
 - 分片片键选错代价巨大。
 
-## 十六、检查清单
+## 十八、检查清单
 
 - 写入前规划访问模式，决定嵌入/引用；
 - 每个查询确认走索引；

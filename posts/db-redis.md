@@ -352,7 +352,40 @@ MEMORY STATS
 user readonly on >pass ~* +@read
 ```
 
-## 十六、检查清单
+## 十六、内存优化与对象编码
+
+同一数据结构在小规模时用紧凑编码，超阈值自动升级：
+
+```bash
+OBJECT ENCODING key        # 看当前编码
+# hash:  listpack → hashtable（hash-max-listpack-entries 128）
+# zset:  listpack → skiplist
+# set:   intset / listpack → hashtable
+```
+
+- **把大对象拆成小 hash** 是经典省内存手法（百万用户资料按 uid 分桶）；
+- 数字字符串共享池：0~9999 的字符串值不额外占内存；
+- `MEMORY USAGE key` 看单键占用；`INFO memory` 里 `mem_fragmentation_ratio` >1.5 考虑重启或开 `activedefrag yes`；
+- 键名也占内存：亿级键时 `u:1001:p` 比 `user:1001:profile` 省出几个 GB。
+
+## 十七、大 Key 与热 Key
+
+**大 Key**（单键几 MB / 集合几十万元素）：删除会阻塞、迁移会卡、网络一次打满。
+
+```bash
+redis-cli --bigkeys                 # 抽样找大 key
+redis-cli --memkeys                 # 按内存找（7.0+）
+UNLINK bigkey                       # 异步删除，别用 DEL
+SCAN 0 MATCH 'sess:*' COUNT 500     # 遍历用 SCAN，永远别 KEYS *
+```
+
+**热 Key**（单键 QPS 过高打爆单分片）：
+
+- 探测：`redis-cli --hotkeys`（需 LFU 淘汰策略）或代理层统计；
+- 缓解：本地缓存兜一层（Caffeine/MemoryCache + 短 TTL）；读多场景把 key 复制成 `key:1..N` 随机读分摊；
+- 集群模式下热 key 无法靠加节点解决——hash 槽只认 key 名。
+
+## 十八、检查清单
 
 - 缓存设 TTL + 随机扰动；
 - 大 key 拆分；

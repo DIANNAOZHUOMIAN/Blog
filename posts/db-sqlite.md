@@ -276,7 +276,52 @@ src.BackupDatabase(dst);
 8. 大批写关 `PRAGMA temp_store = MEMORY`、`PRAGMA cache_size`；
 9. 索引大查询前 `ANALYZE`。
 
-## 十四、常见坑
+## 十四、FTS5 全文检索
+
+内置全文索引，小型站内搜索不用上 Elasticsearch：
+
+```sql
+CREATE VIRTUAL TABLE docs USING fts5(title, body);
+
+INSERT INTO docs VALUES ('Rust 并发', '线程 通道 Mutex ...');
+
+SELECT title, highlight(docs, 1, '[', ']') AS snip
+FROM docs
+WHERE docs MATCH 'mutex OR 通道'
+ORDER BY rank;                       -- BM25 相关度排序
+```
+
+- 中文默认按 unicode 分词效果一般，可用 `tokenize='trigram'` 做子串匹配；
+- 与主表同步：用触发器在增删改时同步写 FTS 表（官方文档的 external content 模式）。
+
+## 十五、CTE 与窗口函数
+
+SQLite 3.25+ 支持完整的窗口函数，3.8.3+ 支持 CTE：
+
+```sql
+-- 递归 CTE：生成日期序列
+WITH RECURSIVE dates(d) AS (
+  SELECT date('2026-01-01')
+  UNION ALL
+  SELECT date(d, '+1 day') FROM dates WHERE d < '2026-01-07'
+)
+SELECT d FROM dates;
+
+-- 窗口函数：每个分类取销量前 2
+SELECT * FROM (
+  SELECT name, cat, sales,
+         ROW_NUMBER() OVER (PARTITION BY cat ORDER BY sales DESC) AS rn
+  FROM products
+) WHERE rn <= 2;
+
+-- 累计和 / 移动平均
+SELECT d, val,
+       SUM(val) OVER (ORDER BY d) AS running_total,
+       AVG(val) OVER (ORDER BY d ROWS 6 PRECEDING) AS ma7
+FROM metrics;
+```
+
+## 十六、常见坑
 
 - 文件锁：Windows 反病毒扫描会持锁；
 - 跨进程访问 NFS 文件 → 损坏风险；
@@ -286,7 +331,7 @@ src.BackupDatabase(dst);
 - `DateTime` 存 TEXT 易解析错误，统一 ISO 8601；
 - 时区：自己管理。
 
-## 十五、检查清单
+## 十七、检查清单
 
 - 启用 WAL + `synchronous=NORMAL`；
 - 启用 `foreign_keys`；

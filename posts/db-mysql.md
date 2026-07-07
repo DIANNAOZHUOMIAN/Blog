@@ -276,7 +276,68 @@ IFNULL(x, 0); NULLIF(a, b); COALESCE(a, b, c);
 CASE WHEN ... THEN ... ELSE ... END;
 ```
 
-## 十二、常见坑
+## 十二、锁与死锁
+
+InnoDB 锁的粒度都在**索引记录**上：
+
+| 锁 | 说明 |
+|---|---|
+| 记录锁 Record Lock | 锁住索引上的一行 |
+| 间隙锁 Gap Lock | 锁住两条记录之间的空隙（RR 隔离级防幻读） |
+| Next-Key Lock | 记录 + 前面的间隙，RR 下的默认行为 |
+| 意向锁 IS/IX | 表级标记，"我要在里面加行锁了" |
+
+```sql
+-- 当前读（加锁读）
+SELECT * FROM orders WHERE id = 1 FOR UPDATE;       -- 排他
+SELECT * FROM orders WHERE id = 1 FOR SHARE;        -- 共享
+
+-- 死锁排查
+SHOW ENGINE INNODB STATUS\G     -- LATEST DETECTED DEADLOCK 一节
+SELECT * FROM performance_schema.data_locks;         -- 8.0 看当前锁
+```
+
+- **无索引的 UPDATE/DELETE 会锁全表扫过的所有行**——大坑，条件列必须有索引；
+- 死锁是常态，客户端要有重试；降低概率：小事务、固定顺序访问、必要时改 RC 隔离级（间隙锁大幅减少）。
+
+## 十三、EXPLAIN 执行计划
+
+```sql
+EXPLAIN SELECT ... ;               -- 基本计划
+EXPLAIN ANALYZE SELECT ... ;       -- 8.0.18+：真实执行并给出耗时
+```
+
+关键列速读：
+
+- **type**（好→差）：`system > const > eq_ref > ref > range > index > ALL`，出现 `ALL` 即全表扫描；
+- **key / key_len**：实际用到的索引与长度（判断复合索引用了几列）；
+- **rows**：预估扫描行数；**filtered**：条件过滤后剩余百分比；
+- **Extra**：`Using index`（覆盖索引，好）、`Using filesort` / `Using temporary`（排序/临时表，考虑加索引）。
+
+## 十四、JSON 类型
+
+```sql
+CREATE TABLE events (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  payload JSON,
+  -- 生成列 + 索引：JSON 字段也能走索引
+  user_id BIGINT AS (payload->>'$.user_id') STORED,
+  KEY idx_user (user_id)
+);
+
+INSERT INTO events(payload) VALUES ('{"user_id": 7, "tags": ["a","b"]}');
+
+SELECT payload->>'$.user_id' AS uid,               -- ->> 取值去引号
+       JSON_EXTRACT(payload, '$.tags[0]'),
+       JSON_CONTAINS(payload->'$.tags', '"a"')
+FROM events;
+
+UPDATE events SET payload = JSON_SET(payload, '$.status', 'done');
+```
+
+8.0 还支持多值索引：`CREATE INDEX idx ON events((CAST(payload->'$.tags' AS CHAR(32) ARRAY)))`。频繁按某字段查询就抽成生成列建索引，别在 WHERE 里裸用 JSON 函数。
+
+## 十五、常见坑
 
 - `utf8` ≠ `utf8mb4`，新建库永远 `utf8mb4`；
 - `LIMIT m, n` 大 offset 慢 → 延迟关联；
@@ -288,7 +349,7 @@ CASE WHEN ... THEN ... ELSE ... END;
 - 用 `pt-osc` / `gh-ost` 做大表在线 DDL；
 - 时区：服务器 `time_zone='+00:00'`，应用统一 UTC。
 
-## 十三、检查清单
+## 十六、检查清单
 
 - 引擎统一 InnoDB；
 - 字符集 utf8mb4；

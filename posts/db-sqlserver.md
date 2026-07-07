@@ -325,7 +325,58 @@ RESTORE LOG db FROM DISK = 'D:\bak\db.trn' WITH RECOVERY;
 - 透明数据加密 (TDE)、Always Encrypted；
 - 审计：SQL Audit + Extended Events。
 
-## 十三、常见错误码
+## 十三、窗口函数与 CTE
+
+```sql
+-- CTE：把子查询起名，可链式、可递归
+WITH monthly AS (
+  SELECT CustomerId, MONTH(OrderDate) m, SUM(Amount) total
+  FROM Orders GROUP BY CustomerId, MONTH(OrderDate)
+)
+SELECT * FROM monthly WHERE total > 1000;
+
+-- 递归 CTE：组织架构展开
+WITH org AS (
+  SELECT Id, Name, ManagerId, 0 AS lvl FROM Emp WHERE ManagerId IS NULL
+  UNION ALL
+  SELECT e.Id, e.Name, e.ManagerId, o.lvl + 1
+  FROM Emp e JOIN org o ON e.ManagerId = o.Id
+)
+SELECT * FROM org OPTION (MAXRECURSION 100);
+
+-- 窗口函数：去重取每组最新一条
+SELECT * FROM (
+  SELECT *, ROW_NUMBER() OVER (
+    PARTITION BY UserId ORDER BY CreatedAt DESC) rn
+  FROM Logins
+) t WHERE rn = 1;
+
+-- LAG/LEAD：环比
+SELECT d, val, val - LAG(val) OVER (ORDER BY d) AS diff FROM Metrics;
+```
+
+分页首选 `OFFSET ... FETCH`（2012+）：`ORDER BY Id OFFSET 20 ROWS FETCH NEXT 10 ROWS ONLY`。
+
+## 十四、临时表、表变量与 tempdb
+
+| | #临时表 | @表变量 | CTE |
+|---|---|---|---|
+| 作用域 | 会话（##全局） | 批处理 | 单条语句 |
+| 统计信息 | 有（计划准） | 无/极少（估 1 行） | — |
+| 索引 | 可随建 | 仅内联定义 | — |
+| 适合 | 大中间结果、多次使用 | 少量行 | 提升可读性 |
+
+```sql
+SELECT * INTO #tmp FROM BigTable WHERE ...;   -- 建临时表
+CREATE INDEX ix ON #tmp(Col);
+
+DECLARE @t TABLE (Id INT PRIMARY KEY, Name NVARCHAR(50));
+```
+
+- 大数据量进表变量常导致糟糕计划（估行数 1），改 #临时表；
+- tempdb 是全实例共享的：排序溢出、版本存储、临时表都挤在这——文件数按 CPU 核配多个、放最快的盘。
+
+## 十五、常见错误码
 
 | 码 | 含义 |
 |---|---|
@@ -337,7 +388,7 @@ RESTORE LOG db FROM DISK = 'D:\bak\db.trn' WITH RECOVERY;
 | 8152 | 字符串/二进制数据被截断 |
 | 8645 | 等待内存授予超时 |
 
-## 十四、检查清单
+## 十六、检查清单
 
 - 开 `READ_COMMITTED_SNAPSHOT`；
 - 所有大表必须有聚集索引（通常是主键）；

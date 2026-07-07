@@ -207,7 +207,64 @@ repos:
 pip install pre-commit && pre-commit install
 ```
 
-## 十一、工程化清单
+## 十一、hypothesis：属性测试
+
+不写具体用例，声明"性质"，由框架生成海量随机输入并自动缩小反例。
+
+```python
+from hypothesis import given, strategies as st
+
+@given(st.lists(st.integers()))
+def test_sort_idempotent(xs):
+    once = sorted(xs)
+    assert sorted(once) == once            # 排序两次结果不变
+
+@given(st.text())
+def test_roundtrip(s):
+    assert s == decode(encode(s))          # 编解码互逆
+```
+
+找到失败时会打印**最小反例**（shrinking），对解析器、序列化、数值边界特别有效。
+
+## 十二、tox / nox：多环境测试
+
+```ini
+# tox.ini：一条命令跑 3.10/3.11/3.12
+[tox]
+envlist = py310, py311, py312
+
+[testenv]
+deps = pytest
+commands = pytest -q
+```
+
+```python
+# noxfile.py：用 Python 写会话，比 ini 灵活
+import nox
+
+@nox.session(python=["3.11", "3.12"])
+def tests(session):
+    session.install("pytest", ".")
+    session.run("pytest", "-q")
+```
+
+库作者必备；应用项目通常锁单版本，CI 矩阵即可。
+
+## 十三、性能剖析
+
+```bash
+python -m cProfile -s cumtime app.py | head -30   # 累计耗时排序
+python -m timeit "'-'.join(map(str, range(100)))" # 微基准
+
+pip install py-spy
+py-spy top --pid 12345          # 不侵入、可看生产进程
+py-spy record -o flame.svg -- python app.py   # 火焰图
+```
+
+- `cProfile` 定位"哪个函数慢"，`line_profiler` 定位"哪一行慢"；
+- `tracemalloc` 排查内存：`tracemalloc.start()` → `take_snapshot().statistics("lineno")`。
+
+## 十四、工程化清单
 
 1. 目录：`src/` 放包、`tests/` 放测试；
 2. 一切配置进 `pyproject.toml`；

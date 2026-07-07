@@ -167,7 +167,81 @@ let results: Vec<_> = inputs.par_iter()
 
 CPU 密集型批处理用 rayon；IO 密集型用异步（见《Rust 异步编程》）。
 
-## 九、选型小结
+## 九、Condvar：条件变量
+
+"等到某个条件成立再继续"，和 `Mutex` 配对使用：
+
+```rust
+use std::sync::{Arc, Condvar, Mutex};
+
+let pair = Arc::new((Mutex::new(false), Condvar::new()));
+let pair2 = Arc::clone(&pair);
+
+std::thread::spawn(move || {
+    let (lock, cvar) = &*pair2;
+    *lock.lock().unwrap() = true;
+    cvar.notify_one();                    // 通知等待方
+});
+
+let (lock, cvar) = &*pair;
+let mut ready = lock.lock().unwrap();
+while !*ready {                           // while 防虚假唤醒
+    ready = cvar.wait(ready).unwrap();    // 等待时自动释放锁
+}
+```
+
+## 十、手写一个极简线程池
+
+理解 `channel + Arc<Mutex>` 组合的经典练习：
+
+```rust
+use std::sync::{mpsc, Arc, Mutex};
+use std::thread;
+
+type Job = Box<dyn FnOnce() + Send + 'static>;
+
+struct Pool { tx: mpsc::Sender<Job> }
+
+impl Pool {
+    fn new(n: usize) -> Self {
+        let (tx, rx) = mpsc::channel::<Job>();
+        let rx = Arc::new(Mutex::new(rx));
+        for _ in 0..n {
+            let rx = Arc::clone(&rx);
+            thread::spawn(move || loop {
+                // 锁只包住 recv，取到任务立刻释放
+                let job = match rx.lock().unwrap().recv() {
+                    Ok(j) => j,
+                    Err(_) => break,          // 发送端关闭，线程退出
+                };
+                job();
+            });
+        }
+        Pool { tx }
+    }
+    fn execute<F: FnOnce() + Send + 'static>(&self, f: F) {
+        self.tx.send(Box::new(f)).unwrap();
+    }
+}
+```
+
+生产代码直接用 `rayon` 或 `threadpool` crate，但这 30 行值得亲手写一遍。
+
+## 十一、死锁与排查
+
+```rust
+// 经典死锁：两把锁、相反顺序
+let a = Arc::new(Mutex::new(1));
+let b = Arc::new(Mutex::new(2));
+// 线程1: lock(a) → lock(b)；线程2: lock(b) → lock(a) → 卡死
+```
+
+- **纪律一**：全项目给锁定固定的获取顺序（按地址、按业务层级）；
+- **纪律二**：锁的作用域越小越好，`let v = *m.lock().unwrap();` 取完即放；
+- **纪律三**：别在持锁时 `.await`（异步里用 `tokio::sync::Mutex`）；
+- 排查工具：卡住时 `gdb -p` 看线程栈；`parking_lot` 的 `deadlock_detection` feature 能在测试期主动报告死锁环。
+
+## 十二、选型小结
 
 | 场景 | 用 |
 |---|---|

@@ -171,3 +171,68 @@ top.truncate(3);
 ```
 
 迭代器链是零成本抽象：编译后与手写循环同等高效，且更易读。
+
+## 八、Entry API 与 HashMap 进阶
+
+"查一次，然后按有无分别处理"，避免两次哈希：
+
+```rust
+use std::collections::HashMap;
+let mut map: HashMap<String, Vec<i32>> = HashMap::new();
+
+map.entry("k".into()).or_default().push(1);       // 无则建默认值
+map.entry("k".into())
+   .and_modify(|v| v.push(2))                     // 有则修改
+   .or_insert_with(|| vec![0]);                   // 无则惰性构造
+
+// 自定义 key：需要 Eq + Hash（一般 derive）
+#[derive(PartialEq, Eq, Hash)]
+struct Point { x: i32, y: i32 }
+
+// 借用查询：HashMap<String, _> 可以直接用 &str 查
+map.get("k");            // 因为 String: Borrow<str>
+```
+
+容量：`HashMap::with_capacity(n)` 预分配；`retain(|k, v| ...)` 原地过滤；要稳定顺序用 `BTreeMap`（还支持范围查询 `map.range("a".."m")`）。
+
+## 九、实现自定义迭代器
+
+只需实现 `next()`，全部适配器立刻免费可用：
+
+```rust
+struct Fib { a: u64, b: u64 }
+
+impl Iterator for Fib {
+    type Item = u64;
+    fn next(&mut self) -> Option<u64> {
+        let out = self.a;
+        (self.a, self.b) = (self.b, self.a + self.b);
+        Some(out)                        // 无限迭代器，靠 take 截断
+    }
+}
+
+let first: Vec<_> = Fib { a: 0, b: 1 }.take(8).collect();
+// [0, 1, 1, 2, 3, 5, 8, 13]
+```
+
+给自己的集合实现 `IntoIterator`（值、`&`、`&mut` 三件套），就能直接用于 `for` 循环；反向实现 `FromIterator` 则让它能作为 `collect()` 的目标。
+
+## 十、collect 的目标类型
+
+`collect()` 由**目标类型**驱动，同一条链可以收成完全不同的东西：
+
+```rust
+let pairs = [("a", 1), ("b", 2)];
+
+let v: Vec<(&str, i32)>          = pairs.iter().copied().collect();
+let m: HashMap<&str, i32>        = pairs.iter().copied().collect();
+let s: String                    = ["ab", "cd"].concat();
+let (evens, odds): (Vec<i32>, Vec<i32>) =
+    (1..10).partition(|x| x % 2 == 0);          // 一次分成两组
+
+// Result 收集：任一 Err 短路（错误处理笔记有详述）
+let nums: Result<Vec<i32>, _> =
+    ["1", "2"].iter().map(|s| s.parse::<i32>()).collect();
+```
+
+性能提示：`iter().map().collect::<Vec<_>>()` 会利用 `size_hint` 一次性分配；中间避免 `collect` 成临时 Vec 再继续链——直接把链写通常更省。

@@ -197,7 +197,87 @@ args = parser.parse_args()
 if args.verbose: print(f"处理 {args.path} x{args.count}")
 ```
 
-## 十一、其他常用
+## 十一、dataclasses：少写样板类
+
+```python
+from dataclasses import dataclass, field, asdict
+
+@dataclass
+class User:
+    name: str
+    age: int = 0
+    tags: list[str] = field(default_factory=list)   # 可变默认值必须用 factory
+
+u = User("Tom", 18)
+asdict(u)                       # → {'name': 'Tom', 'age': 18, 'tags': []}
+
+@dataclass(frozen=True, slots=True)   # 不可变 + 省内存，可作 dict 键
+class Point:
+    x: float
+    y: float
+```
+
+自动生成 `__init__` / `__repr__` / `__eq__`；`order=True` 再送比较运算符。
+
+## 十二、enum：枚举
+
+```python
+from enum import Enum, IntEnum, Flag, auto
+
+class Status(Enum):
+    PENDING = auto()
+    DONE = auto()
+
+Status.DONE.name, Status.DONE.value     # 'DONE', 2
+Status["DONE"], Status(2)               # 按名 / 按值取
+
+class Perm(Flag):                       # 可位运算的标志
+    READ = auto(); WRITE = auto(); EXEC = auto()
+
+p = Perm.READ | Perm.WRITE
+Perm.READ in p                          # True
+```
+
+## 十三、typing 常用写法
+
+```python
+from typing import Optional, Literal, TypedDict, Protocol, TypeVar
+
+def find(name: str) -> Optional[int]: ...        # int 或 None（3.10+ 可写 int | None）
+def mode(m: Literal["r", "w"]) -> None: ...      # 只允许这几个值
+
+class Row(TypedDict):                            # 给 dict 定结构
+    id: int
+    name: str
+
+class Closable(Protocol):                        # 结构化鸭子类型
+    def close(self) -> None: ...
+
+T = TypeVar("T")
+def first(xs: list[T]) -> T: return xs[0]        # 泛型函数
+```
+
+## 十四、contextlib：上下文工具
+
+```python
+from contextlib import contextmanager, suppress, closing, ExitStack
+
+@contextmanager
+def timer(label):                     # 用生成器写 with 资源
+    t0 = time.perf_counter()
+    try:
+        yield
+    finally:
+        print(label, time.perf_counter() - t0)
+
+with suppress(FileNotFoundError):     # 明确地忽略某类异常
+    Path("tmp.txt").unlink()
+
+with ExitStack() as stack:            # 动态数量的资源统一关闭
+    files = [stack.enter_context(open(p)) for p in paths]
+```
+
+## 十五、其他常用
 
 ```python
 import random

@@ -152,7 +152,72 @@ c.is_alphabetic(); c.is_numeric(); c.is_whitespace();
 c.to_ascii_uppercase();
 ```
 
-## 十、常见坑
+## 十、Cow\<str\>：按需分配
+
+"多数情况借用、偶尔需要修改"时避免无谓克隆：
+
+```rust
+use std::borrow::Cow;
+
+fn normalize(input: &str) -> Cow<'_, str> {
+    if input.contains(' ') {
+        Cow::Owned(input.replace(' ', "_"))   // 真要改，才分配
+    } else {
+        Cow::Borrowed(input)                  // 不用改，零拷贝
+    }
+}
+
+let s = normalize("no_space");    // 没有分配
+let t = normalize("has space");   // 只有这次分配
+```
+
+标准库自身也在用：`String::from_utf8_lossy` 返回 `Cow<str>` —— 全合法时借用，有坏字节才替换并分配。
+
+## 十一、OsStr / Path / CString
+
+```rust
+use std::path::{Path, PathBuf};
+
+let p: PathBuf = ["logs", "2026", "app.log"].iter().collect();
+p.extension();                    // Some("log")
+p.with_extension("bak");          // logs/2026/app.bak
+p.to_str();                       // Option<&str>：路径未必是合法 UTF-8
+
+// 环境变量 / 命令行参数是 OsString
+let home = std::env::var_os("HOME");     // 不因非 UTF-8 而 panic
+
+// FFI 传 C 字符串
+use std::ffi::CString;
+let c = CString::new("hello").unwrap();  // 内部不能含 \0
+unsafe { libc_puts(c.as_ptr()); }
+```
+
+规则：文件路径用 `Path`/`PathBuf`，跨 FFI 用 `CString`/`CStr`，别急着 `to_string()`。
+
+## 十二、容量管理与性能
+
+```rust
+// 预分配：已知大小时避免反复扩容
+let mut s = String::with_capacity(1024);
+for item in &items {
+    s.push_str(item);
+}
+s.shrink_to_fit();               // 归还多余容量
+
+// 拼接选择（从快到慢，视场景）：
+// 1. write! 到 String（无中间分配）
+use std::fmt::Write;
+let mut out = String::new();
+write!(out, "{}-{}", a, b).unwrap();
+// 2. concat / join
+let joined = vec!["a", "b", "c"].join("-");
+// 3. 循环 + push_str（预分配后也很快）
+// 反例：s = s + x 每次都移动/可能重分配
+```
+
+`String` 是 `Vec<u8>` 的封装：`len()`/`capacity()` 都按字节算，中文一个字 3 字节。
+
+## 十三、常见坑
 
 1. **`s.len()` 是字节数**，要字符数用 `s.chars().count()`；
 2. **不能整数索引** `s[0]`，用 `chars().nth()` 或字节切片；
