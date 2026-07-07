@@ -1,7 +1,8 @@
 /* 思维导图：分类 → 文章 → 二级标题 → 三级标题
    3D 星云视图（Canvas 手写投影，无依赖）：
-   分类是发光核心，文章是环绕的恒星（斐波那契球面均匀分布），
-   知识点像星团聚在各自文章周围，带彩色星云雾、星尘与景深。
+   分类是呼吸发光的核心恒星，文章是环绕的恒星（斐波那契球面均匀分布），
+   知识点像星团聚在各自文章周围；彩色星云雾、远景视差星云、星尘闪烁、
+   十字光斑、节点漂移、能量光点沿光束流向文章，加暗角与景深。
    拖拽旋转、滚轮缩放、悬停点亮分支并显示标签、
    单击展开/收起、双击跳转到文章对应章节。 */
 (function () {
@@ -54,7 +55,7 @@
   /* ───── 状态 ───── */
   let cat = null;
   let expanded = new Map();              // catId -> Set(展开的节点 id)
-  let nodes = [], links = [], stars = [], hazes = [];
+  let nodes = [], links = [], stars = [], hazes = [], farBlobs = [];
   let R1 = 280, R2 = 500;
   let yaw = -0.5, pitch = 0.26, dist = 1400;
   const F = 900;                          // 焦距
@@ -200,23 +201,51 @@
   }
 
   function finalize() {
-    // 星尘：随分类固定播种
     const rnd = lcg(hashStr(cat.id));
-    stars = [];
     const SR = Math.max(900, R2 * 1.7);
-    for (let i = 0; i < 170; i++) {
+
+    // 星尘：随分类固定播种；少数亮星带十字光斑
+    stars = [];
+    for (let i = 0; i < 340; i++) {
       const v = 2 * rnd() - 1, th = rnd() * TAU;
-      const rr = Math.sqrt(1 - v * v), rad = SR * (0.35 + 0.65 * Math.cbrt(rnd()));
+      const rr = Math.sqrt(1 - v * v);
+      const rad = SR * (0.3 + 0.7 * Math.cbrt(rnd()));
+      const cc = rnd();
       stars.push({
         pos: { x: Math.cos(th) * rr * rad, y: v * rad, z: Math.sin(th) * rr * rad },
-        r: 0.5 + rnd() * 1.1, a: 0.1 + rnd() * 0.35,
-        tw: 0.5 + rnd() * 1.6, ph: rnd() * TAU,
+        r: 0.5 + rnd() * 1.3, a: 0.08 + rnd() * 0.34,
+        tw: 0.4 + rnd() * 1.8, ph: rnd() * TAU,
+        color: cc < 0.6 ? '#cdd6ee' : cc < 0.85 ? '#ffe9d0' : '#bcd8ff',
+        flare: rnd() < 0.06,
       });
     }
+
+    // 远景星云：巨大、极淡，旋转时产生视差纵深
+    farBlobs = [];
+    const FB = ['#3d4380', '#5a3a7e', '#2a5c6e', '#6e3a55'];
+    for (let i = 0; i < 4; i++) {
+      const v = 2 * rnd() - 1, th = rnd() * TAU;
+      const rr = Math.sqrt(1 - v * v);
+      const rad = SR * (0.85 + 0.5 * rnd());
+      farBlobs.push({
+        pos: { x: Math.cos(th) * rr * rad, y: v * rad * 0.7, z: Math.sin(th) * rr * rad },
+        r: SR * (0.55 + 0.4 * rnd()),
+        color: FB[i % FB.length],
+      });
+    }
+
+    // 节点缓慢漂移（确定性相位，星云是活的）
+    nodes.forEach(n => {
+      const h = hashStr(n.id);
+      n.dph  = (h % 628) / 100;
+      n.dsp  = 0.0003 + ((h >>> 3) % 100) * 0.0000036;
+      n.damp = [0, 5, 8, 11][n.depth];
+    });
+
     hover = null; litSet = null;
   }
 
-  /* ───── 发光贴图缓存 ───── */
+  /* ───── 发光/光斑贴图缓存 ───── */
   const glowCache = new Map();
   function glow(color) {
     let g = glowCache.get(color);
@@ -226,13 +255,35 @@
       const gc = g.getContext('2d');
       const gr = gc.createRadialGradient(64, 64, 0, 64, 64, 64);
       gr.addColorStop(0, color);
-      gr.addColorStop(0.25, color + 'aa');
+      gr.addColorStop(0.16, color + 'b0');
+      gr.addColorStop(0.45, color + '36');
       gr.addColorStop(1, color + '00');
       gc.fillStyle = gr;
       gc.fillRect(0, 0, 128, 128);
       glowCache.set(color, g);
     }
     return g;
+  }
+  const flareCache = new Map();
+  function flare(color) {
+    let f = flareCache.get(color);
+    if (!f) {
+      f = document.createElement('canvas');
+      f.width = f.height = 256;
+      const fc = f.getContext('2d');
+      fc.translate(128, 128);
+      for (let i = 0; i < 2; i++) {
+        const gr = fc.createLinearGradient(-128, 0, 128, 0);
+        gr.addColorStop(0, color + '00');
+        gr.addColorStop(0.5, color + 'cc');
+        gr.addColorStop(1, color + '00');
+        fc.fillStyle = gr;
+        fc.fillRect(-128, -2.2, 256, 4.4);
+        fc.rotate(Math.PI / 2);
+      }
+      flareCache.set(color, f);
+    }
+    return f;
   }
 
   /* ───── 投影与渲染 ───── */
@@ -261,52 +312,94 @@
     return Math.max(0.18, Math.min(1, 0.25 + (rel - 0.72) * 1.6));
   }
 
+  let vig = { w: 0, h: 0, g: null };
+  function vignette() {
+    if (vig.w !== W || vig.h !== H) {
+      const g = ctx.createRadialGradient(
+        W / 2, H / 2, Math.min(W, H) * 0.42,
+        W / 2, H / 2, Math.max(W, H) * 0.74);
+      g.addColorStop(0, 'rgba(4,5,10,0)');
+      g.addColorStop(1, 'rgba(4,5,10,0.55)');
+      vig = { w: W, h: H, g: g };
+    }
+    return vig.g;
+  }
+
   function renderFrame(t) {
     resize();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     /* 深空背景 */
     const bg = ctx.createRadialGradient(
-      W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H) * 0.75);
+      W / 2, H * 0.42, 0, W / 2, H / 2, Math.max(W, H) * 0.8);
     bg.addColorStop(0, BG0);
     bg.addColorStop(1, BG1);
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, W, H);
 
+    /* 相机：拖拽的俯仰上叠加极缓慢的呼吸摆动，增强纵深 */
+    const wob = REDUCED ? 0 : 0.05 * Math.sin(t * 0.00005);
     const cyw = Math.cos(yaw), syw = Math.sin(yaw);
-    const cpt = Math.cos(pitch), spt = Math.sin(pitch);
+    const cpt = Math.cos(pitch + wob), spt = Math.sin(pitch + wob);
     const P = p => project(p, cyw, syw, cpt, spt);
 
-    /* 星云雾 + 星尘（叠加发光） */
+    /* 漂移后的节点投影（连线 / 命中检测共用） */
+    nodes.forEach(n => {
+      if (!n.damp || REDUCED) { n.pr = P(n.pos); return; }
+      const ph = t * n.dsp + n.dph;
+      n.pr = P({
+        x: n.pos.x + Math.sin(ph) * n.damp,
+        y: n.pos.y + Math.cos(ph * 0.9) * n.damp,
+        z: n.pos.z + Math.sin(ph * 0.7 + 1.7) * n.damp,
+      });
+    });
+
     ctx.globalCompositeOperation = 'lighter';
+
+    /* 远景星云（视差纵深） */
+    farBlobs.forEach(fb => {
+      const q = P(fb.pos);
+      if (!q) return;
+      const r = fb.r * q.s;
+      ctx.globalAlpha = 0.05 * (litSet ? 0.5 : 1);
+      ctx.drawImage(glow(fb.color), q.x - r, q.y - r, r * 2, r * 2);
+    });
+
+    /* 星团雾 */
     hazes.forEach(hz => {
       const q = P(hz.pos);
       if (!q) return;
       const r = hz.r * q.s;
-      ctx.globalAlpha = 0.075 * fog(q.s) * (litSet ? 0.4 : 1);
+      ctx.globalAlpha = 0.085 * fog(q.s) * (litSet ? 0.35 : 1);
       ctx.drawImage(glow(hz.color), q.x - r, q.y - r, r * 2, r * 2);
     });
+
+    /* 星尘：闪烁 + 少量十字光斑 */
     stars.forEach(st => {
       const q = P(st.pos);
       if (!q) return;
-      const twk = REDUCED ? 1 : 0.72 + 0.28 * Math.sin(t * 0.001 * st.tw + st.ph);
-      ctx.globalAlpha = st.a * twk * (litSet ? 0.35 : 1);
-      const r = Math.max(0.4, st.r * q.s * 3);
-      ctx.drawImage(glow('#cdd6ee'), q.x - r, q.y - r, r * 2, r * 2);
+      const twk = REDUCED ? 1 : 0.65 + 0.35 * Math.sin(t * 0.001 * st.tw + st.ph);
+      const a = st.a * twk * (litSet ? 0.3 : 1);
+      const r = Math.max(0.4, st.r * q.s * 3.2);
+      ctx.globalAlpha = a;
+      ctx.drawImage(glow(st.color), q.x - r, q.y - r, r * 2, r * 2);
+      if (st.flare) {
+        const fr = r * 7;
+        ctx.globalAlpha = a * 0.5;
+        ctx.drawImage(flare(st.color), q.x - fr, q.y - fr, fr * 2, fr * 2);
+      }
     });
     ctx.globalCompositeOperation = 'source-over';
 
-    /* 投影所有节点（供连线 / 命中检测共用） */
-    nodes.forEach(n => { n.pr = P(n.pos); });
-
-    /* 连线 */
-    links.forEach(lk => {
+    /* 连线（微光呼吸） */
+    links.forEach((lk, i) => {
       const a = lk.a.pr, b = lk.b.pr;
       if (!a || !b) return;
       const lit = !litSet || litSet.has(lk.b.id);
-      ctx.globalAlpha = (lk.b.depth === 1 ? 0.22 : 0.3) * fog(b.s) *
-                        (lit ? (litSet ? 2.6 : 1) : 0.12);
-      if (ctx.globalAlpha > 0.85) ctx.globalAlpha = 0.85;
+      const shim = REDUCED ? 1 : 0.8 + 0.2 * Math.sin(t * 0.0012 + i * 0.61);
+      ctx.globalAlpha = Math.min(0.85,
+        (lk.b.depth === 1 ? 0.26 : 0.3) * fog(b.s) * shim *
+        (lit ? (litSet ? 2.6 : 1) : 0.1));
       ctx.strokeStyle = lk.b.color;
       ctx.lineWidth = Math.max(0.4, (lk.b.depth === 1 ? 1.2 : 0.9) * b.s);
       ctx.beginPath();
@@ -315,36 +408,60 @@
       ctx.stroke();
     });
 
-    /* 节点（先远后近） */
+    ctx.globalCompositeOperation = 'lighter';
+
+    /* 能量光点：沿核心 → 文章的光束流动 */
+    if (!REDUCED) {
+      links.forEach((lk, i) => {
+        if (lk.b.depth !== 1) return;
+        const a = lk.a.pr, b = lk.b.pr;
+        if (!a || !b) return;
+        if (litSet && !litSet.has(lk.b.id)) return;
+        const u = (t * 0.00012 + i * 0.137) % 1;
+        const x = a.x + (b.x - a.x) * u;
+        const y = a.y + (b.y - a.y) * u;
+        const r = Math.max(1.5, 3.4 * b.s);
+        ctx.globalAlpha = 0.4 * Math.sin(u * Math.PI);
+        ctx.drawImage(glow(lk.b.color), x - r, y - r, r * 2, r * 2);
+      });
+    }
+
+    /* 节点（先远后近；彩色光晕 + 白热核心，像真的恒星） */
     const order = nodes.filter(n => n.pr)
                        .sort((a, b) => b.pr.d - a.pr.d);
-    ctx.globalCompositeOperation = 'lighter';
     order.forEach(n => {
       const q = n.pr;
       const lit = !litSet || litSet.has(n.id);
-      const dim = lit ? 1 : 0.18;
+      const dim = lit ? 1 : 0.15;
       if (n.depth === 0) {
-        const r = 70 * q.s;
-        ctx.globalAlpha = 0.9 * dim;
+        const breath = REDUCED ? 1 : 1 + 0.07 * Math.sin(t * 0.0008);
+        const r = 78 * q.s * breath;
+        ctx.globalAlpha = 0.95 * dim;
         ctx.drawImage(glow(CORE), q.x - r, q.y - r, r * 2, r * 2);
+        const fr = r * 2.1;
+        ctx.globalAlpha = 0.5 * dim;
+        ctx.drawImage(flare(CORE), q.x - fr, q.y - fr, fr * 2, fr * 2);
         return;
       }
       const cr = Math.max(1, CORE_R[n.depth] * q.s * 1.9);
-      const gr = cr * (n.depth === 1 ? 4.2 : 3.4);
-      ctx.globalAlpha = (n.depth === 1 ? 0.5 : 0.34) * fog(q.s) * dim *
-                        (hover === n ? 1.7 : 1);
+      const gr = cr * (n.depth === 1 ? 5 : 4);
+      ctx.globalAlpha = (n.depth === 1 ? 0.55 : 0.38) * fog(q.s) * dim *
+                        (hover === n ? 1.6 : 1);
       ctx.drawImage(glow(n.color), q.x - gr, q.y - gr, gr * 2, gr * 2);
-      ctx.globalAlpha = Math.min(1, fog(q.s) * (0.9 + (hover === n ? 0.1 : 0)) * dim);
-      ctx.fillStyle = n.color;
-      ctx.beginPath();
-      ctx.arc(q.x, q.y, cr, 0, TAU);
-      ctx.fill();
+      const wr = cr * 1.35;
+      ctx.globalAlpha = Math.min(1, 0.9 * fog(q.s) * dim);
+      ctx.drawImage(glow('#fff6ea'), q.x - wr, q.y - wr, wr * 2, wr * 2);
+      if (n.depth === 1 && hover === n) {
+        const fr = cr * 6;
+        ctx.globalAlpha = 0.45;
+        ctx.drawImage(flare(n.color), q.x - fr, q.y - fr, fr * 2, fr * 2);
+      }
       if (n.kids && !n.open) {          // 收起标记：细环
         ctx.globalAlpha = 0.55 * fog(q.s) * dim;
         ctx.strokeStyle = n.color;
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.arc(q.x, q.y, cr + 3, 0, TAU);
+        ctx.arc(q.x, q.y, cr + 3.5, 0, TAU);
         ctx.stroke();
       }
     });
@@ -394,7 +511,11 @@
         ctx.fillText('+' + n.kids, sx, ty);
       }
     });
+
+    /* 暗角：视线聚向中心 */
     ctx.globalAlpha = 1;
+    ctx.fillStyle = vignette();
+    ctx.fillRect(0, 0, W, H);
   }
 
   /* ───── 主循环：闲时缓慢自转 ───── */
