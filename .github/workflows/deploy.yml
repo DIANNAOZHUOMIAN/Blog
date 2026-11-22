@@ -24,22 +24,26 @@ jobs:
 
       # 4. 通过 SSH 部署到 VPS
       - name: 部署到 VPS
-        uses: appleboy/scp-action@v0.1.7
+        uses: appleboy/scp-action@v1.0.0
         with:
           host: "2001:470:d:97b:1::47"
           port: 22
+          protocol: tcp6
+          version: 1.8.3
           username: root
-          key: ${{ secrets.LSJ }} # 在 GitHub Secrets 中配置
+          key: ${{ secrets.VPS_ED25519 }}
           source: "dist/"
           target: "/var/www/blog/myrepo/"
           strip_components: 1                # 去掉 dist/ 前缀，直接放文件
 
       # 5. 重载 Nginx（确保新文件生效）
       - name: 重载 Nginx
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@v1.2.5
         with:
           host: "2001:470:d:97b:1::47"
           port: 22
+          protocol: tcp6
+          version: 1.8.6
           username: root
-          key: ${{ secrets.LSJ }}
+          key: ${{ secrets.VPS_ED25519 }}
           script: nginx -s reload
